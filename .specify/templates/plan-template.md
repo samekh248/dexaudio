@@ -40,7 +40,23 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Verify compliance with `.specify/memory/constitution.md` before proceeding. Confirm each
+gate explicitly (✅ Pass / ❌ Fail / N/A):
+
+| Gate | Principle | Status |
+|------|-----------|--------|
+| Frontend uses latest stable React + TypeScript strict | I. Technology Stack | |
+| Backend uses latest stable Node.js LTS + TypeScript strict | I. Technology Stack | |
+| Database is PostgreSQL (no alternative stores introduced) | I. Technology Stack | |
+| All UI components sourced from shadcn/ui first | II. UI Component Standards | |
+| Any custom components justified in Complexity Tracking | II. UI Component Standards | |
+| Frontend ↔ Backend via RESTful API only (versioned `/api/v1/…`) | III. API Contract | |
+| Shared TypeScript types defined for all API contracts | III. API Contract | |
+| Frontend meets WCAG 2.1 AA accessibility requirements | IV. Frontend Quality | |
+| Frontend is offline-first PWA with service worker | IV. Frontend Quality | |
+| Responsive layout supports 320 px mobile through desktop | IV. Frontend Quality | |
+| No new libraries/services added without explicit request | V. Simplicity & Restraint | |
+| Any new dependencies documented in Complexity Tracking | V. Simplicity & Restraint | |
 
 ## Project Structure
 
