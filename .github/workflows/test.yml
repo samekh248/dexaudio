@@ -1,0 +1,49 @@
+name: Test
+
+on:
+  push:
+    branches: [master, "cursor/**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dexaudio
+          POSTGRES_PASSWORD: dexaudio
+          POSTGRES_DB: dexaudio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - run: npm install
+      - run: npm run build -w packages/shared-types
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://dexaudio:dexaudio@localhost:5432/dexaudio
+        run: |
+          PGPASSWORD=dexaudio psql -h localhost -U dexaudio -d dexaudio -f backend/drizzle/0000_init.sql || true
+
+      - name: Frontend coverage
+        run: npm run test:coverage -w frontend
+
+      - name: Backend coverage
+        env:
+          DATABASE_URL: postgresql://dexaudio:dexaudio@localhost:5432/dexaudio
+          APP_SECRET: "${{ secrets.APP_SECRET || 'ci-test-secret-minimum-32-chars!!' }}"
+        run: npm run test:coverage -w backend
