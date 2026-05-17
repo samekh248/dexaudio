@@ -60,7 +60,7 @@ All items from Technical Context were resolved; no `NEEDS CLARIFICATION` remains
 
 ## 5. Plex integration pattern
 
-**Decision**: Backend **Plex proxy** — browser never holds Plex token. Backend uses `@plexinc/plex-media-server` or direct Plex HTTP API with server-stored token. Stream endpoint: `GET /api/v1/stream/:trackId` returns redirect or chunked proxy; frontend `<audio>` / Web Audio reads from same-origin URL.
+**Decision**: Backend **Plex proxy** — browser never holds Plex token. Backend uses `@plexinc/plex-media-server` or direct Plex HTTP API with server-stored token. Stream endpoint: `GET /api/v1/stream/:trackId` returns redirect or chunked proxy; frontend **Howler.js** plays from same-origin stream URLs or IndexedDB blob URLs.
 
 **Rationale**: FR-054 requires credentials not plain on disk in client; CORS to Plex is unreliable. Backend can log play progress to Plex where required.
 
@@ -72,12 +72,13 @@ All items from Technical Context were resolved; no `NEEDS CLARIFICATION` remains
 
 ## 6. Audio playback and crossfade
 
-**Decision**: HTML5 `Audio` element for v1 with optional **Web Audio API** crossfade (two buffers, gain ramps) when setting enabled.
+**Decision**: **[Howler.js](https://howlerjs.com/)** (`howler` npm package) as the sole playback engine. A `usePlayer` hook wraps a `Howl` (or paired `Howl` instances for overlap) per track, sourcing `src` from the backend proxy URL or an IndexedDB object URL when cached. Crossfade (FR-016) uses Howler’s volume fades: fade out the outgoing `Howl`, fade in the incoming `Howl` over the user-configured duration, capped per spec edge cases.
 
-**Rationale**: Meets FR-016; Web Audio gives controlled overlap; shadcn controls wrap transport UI.
+**Rationale**: Howler abstracts Web Audio / HTML5 Audio with a stable API for play/pause/seek/volume, supports multiple concurrent sounds for crossfade, and handles format quirks across browsers — reducing custom Web Audio glue. Transport UI remains shadcn (`Slider`, `Button`, etc.) bound to Howler state.
 
 **Alternatives considered**:
-- Howler.js — new dependency; only add if Web Audio crossfade insufficient in implement phase
+- Raw HTML5 `Audio` — insufficient for reliable crossfade and concurrent decode without bespoke Web Audio code
+- Web Audio API directly — more control but higher implementation cost for v1; Howler already uses Web Audio where available
 
 ---
 

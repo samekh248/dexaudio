@@ -15,7 +15,7 @@ Build a **PWA-capable web music player** (installable desktop wrapper) that stre
 **Language/Version**: TypeScript 5.x strict on both tiers; React **19.2.x** (latest stable); Node.js **22.x LTS** (latest stable LTS); PostgreSQL **16+** (latest stable)
 
 **Primary Dependencies**:
-- **Frontend**: Vite, React 19, React Router, TanStack Query, Zustand (playback/queue UI state), shadcn/ui + Tailwind CSS, `workbox` (service worker / PWA), Vitest + Testing Library + MSW
+- **Frontend**: Vite, React 19, React Router, TanStack Query, Zustand (playback/queue UI state), **Howler.js** (audio playback + crossfade), shadcn/ui + Tailwind CSS, `workbox` (service worker / PWA), Vitest + Testing Library + MSW
 - **Backend**: Fastify (or Express), Zod validation, Drizzle ORM + `drizzle-kit`, `pg`, Vitest + supertest; optional `@apollo/server` + `graphql` for read-only GraphQL
 - **Shared**: `packages/shared-types` — Zod schemas + inferred TS types for REST bodies and domain enums
 
@@ -97,7 +97,7 @@ frontend/
 │   ├── hooks/
 │   ├── services/           # REST client (TanStack Query)
 │   ├── stores/             # playback queue, player
-│   └── lib/                # localStorage, IndexedDB cache, audio engine
+│   └── lib/                # localStorage, IndexedDB cache, Howler player service
 ├── public/                 # manifest, icons
 └── tests/
     └── unit/
@@ -113,7 +113,8 @@ docker-compose.yml          # PostgreSQL for local dev
 |----------------------|------------|--------------------------------------|
 | Optional GraphQL read API | User explicitly requested optional GraphQL alongside REST | REST-only is default, but GraphQL helps aggregate library + stats queries in one round-trip for complex screens |
 | IndexedDB in addition to `localStorage` | Spec requires multi-GB audio caches; `localStorage` ~5MB limit | `localStorage` alone cannot store FLAC blobs or pinned libraries |
-| Custom `AudioPlayer` / waveform / crossfade UI | No shadcn equivalent for HTML5 audio pipeline + gapless/crossfade | Composing shadcn `Slider`, `Button`, `Card` around a thin custom audio hook |
+| Howler.js playback library | User-directed choice for playback/crossfade (research §6); not a UI component | Raw HTML5/Web Audio rejected for crossfade complexity |
+| Custom `AudioPlayer` transport shell | No shadcn equivalent for player chrome wired to Howler | Composing shadcn `Slider`, `Button`, `Card` around `usePlayer` (Howler-backed) |
 | Custom album grid density / now-playing hero layout | shadcn has no album-wall component | Built from shadcn `Card`, `AspectRatio`, `ScrollArea` with layout CSS |
 | Custom theme live-preview color pickers | shadcn color input patterns exist but preset manager is app-specific | `Popover` + native/color input from shadcn patterns |
 | FR-095 vs Constitution IV (Custom theme no contrast check) | Product spec mandates no WCAG blocking on user Custom colors | Constitution AA applies to default themes and component primitives; Custom mode documents user responsibility |
