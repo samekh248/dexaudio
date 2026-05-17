@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Step "Waiting for Postgres"
 $ready = $false
-for ($i = 0; $i - 30; $i++) {
+for ($i = 0; $i -lt 30; $i++) {
     docker compose exec -T postgres pg_isready -U dexaudio 2>$null
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
     Start-Sleep -Seconds 1
@@ -35,7 +35,7 @@ $backendEnv = Join-Path $Root "backend\.env"
 $backendExample = Join-Path $Root "backend\.env.example"
 if (-not (Test-Path $backendEnv)) {
     Copy-Item $backendExample $backendEnv
-    Write-Host "Created backend\.env — set APP_SECRET to at least 32 characters." -ForegroundColor Yellow
+    Write-Host "Created backend\.env - set APP_SECRET to at least 32 characters." -ForegroundColor Yellow
 }
 
 # Ensure APP_SECRET is long enough for Zod validation
@@ -71,6 +71,7 @@ Start-Process $shell -ArgumentList @("-NoExit", "-Command", $backendCmd)
 Start-Sleep -Seconds 2
 Start-Process $shell -ArgumentList @("-NoExit", "-Command", $frontendCmd)
 
-Write-Host "`nOpen http://localhost:5173" -ForegroundColor Green
+Write-Host ""
+Write-Host "Open http://localhost:5173" -ForegroundColor Green
 Write-Host "First-time Plex setup: http://localhost:5173/setup" -ForegroundColor Green
 Write-Host "API health: http://localhost:3001/api/v1/health" -ForegroundColor Green
