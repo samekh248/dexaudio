@@ -1,0 +1,107 @@
+# Optional GraphQL API (read-only)
+# Enable with GRAPHQL_ENABLED=true on backend.
+# Mutations are NOT exposed — use REST /api/v1 for writes.
+
+schema {
+  query: Query
+}
+
+type Query {
+  health: String!
+  plexConnection: PlexConnection
+  libraries: [PlexLibrary!]!
+  albumGrid(libraryId: ID!, page: Int = 1, pageSize: Int = 48): AlbumConnection!
+  artistAlbums(artistId: ID!): [Album!]!
+  albumTracks(albumId: ID!): [Track!]!
+  search(q: String!): SearchResults!
+  similarTracks(seedTrackId: ID!, limit: Int = 25): [Track!]!
+  topStats: TopStats!
+  discogsCollection(status: MatchStatus): [DiscogsCollectionItem!]!
+}
+
+type PlexConnection {
+  serverUrl: String!
+  connected: Boolean!
+  libraryIds: [ID!]!
+}
+
+type PlexLibrary {
+  id: ID!
+  title: String!
+}
+
+type Album {
+  id: ID!
+  title: String!
+  artist: String!
+  year: Int
+  artUrl: String
+  playCount: Int
+  pinned: Boolean
+}
+
+type AlbumConnection {
+  items: [Album!]!
+  total: Int!
+  page: Int!
+}
+
+type Track {
+  id: ID!
+  title: String!
+  artist: String!
+  album: String!
+  albumId: ID!
+  durationMs: Int!
+  format: AudioFormat!
+  artUrl: String
+  playCount: Int
+}
+
+enum AudioFormat {
+  FLAC
+  MP3
+  UNSUPPORTED
+}
+
+type SearchResults {
+  albums: [Album!]!
+  tracks: [Track!]!
+}
+
+type TopStats {
+  songs: [RankedSong!]!
+  albums: [RankedAlbum!]!
+  artists: [RankedArtist!]!
+}
+
+type RankedSong {
+  track: Track!
+  playCount: Int!
+}
+
+type RankedAlbum {
+  album: Album!
+  playCount: Int!
+}
+
+type RankedArtist {
+  name: String!
+  playCount: Int!
+}
+
+enum MatchStatus {
+  MATCHED
+  PARTIAL
+  NOT_ON_PLEX
+}
+
+type DiscogsCollectionItem {
+  releaseId: Int!
+  title: String!
+  artist: String!
+  year: Int
+  format: String!
+  matchStatus: MatchStatus!
+  plexAlbumId: ID
+}

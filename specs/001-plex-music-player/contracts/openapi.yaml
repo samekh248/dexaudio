@@ -1,0 +1,481 @@
+openapi: 3.1.0
+info:
+  title: Dexaudio API
+  version: 1.0.0
+  description: REST API for Plex Music Player (primary contract). All paths prefixed with /api/v1.
+servers:
+  - url: http://localhost:3001/api/v1
+    description: Local development
+
+tags:
+  - name: Plex
+  - name: Library
+  - name: Playback
+  - name: Stats
+  - name: Discogs
+  - name: Lastfm
+  - name: Settings
+  - name: Cache
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: OK
+
+  /plex/connection:
+    get:
+      tags: [Plex]
+      summary: Get Plex connection status (masked token)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexConnectionPublic"
+    put:
+      tags: [Plex]
+      summary: Save and validate Plex connection
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlexConnectionInput"
+      responses:
+        "200":
+          description: Connected
+        "400":
+          $ref: "#/components/responses/Error"
+
+  /plex/libraries:
+    get:
+      tags: [Plex]
+      summary: List music libraries on connected server
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlexLibrary"
+
+  /library/albums:
+    get:
+      tags: [Library]
+      summary: Album grid (album-centric browse)
+      parameters:
+        - name: libraryId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: page
+          in: query
+          schema: { type: integer, default: 1 }
+        - name: pageSize
+          in: query
+          schema: { type: integer, default: 48 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumPage"
+
+  /library/artists/{artistId}/albums:
+    get:
+      tags: [Library]
+      summary: Albums for artist (no flat track list)
+      parameters:
+        - name: artistId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Album"
+
+  /library/albums/{albumId}/tracks:
+    get:
+      tags: [Library]
+      summary: Tracks for album
+      parameters:
+        - name: albumId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Track"
+
+  /library/search:
+    get:
+      tags: [Library]
+      summary: Search artists, albums, tracks
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResults"
+
+  /playback/similar:
+    get:
+      tags: [Playback]
+      summary: Plex radio / sonically similar tracks (library-only)
+      parameters:
+        - name: seedTrackId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 25 }
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Track"
+
+  /stream/{trackId}:
+    get:
+      tags: [Playback]
+      summary: Stream or redirect audio for track (FLAC/MP3)
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Audio stream
+          content:
+            audio/mpeg: {}
+            audio/flac: {}
+        "404":
+          $ref: "#/components/responses/Error"
+        "415":
+          description: Unsupported format
+
+  /stats/top:
+    get:
+      tags: [Stats]
+      summary: Top 10 songs, albums, artists (Plex play history)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TopStats"
+
+  /discogs/connection:
+    put:
+      tags: [Discogs]
+      summary: Save Discogs credentials
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiscogsConnectionInput"
+      responses:
+        "200":
+          description: Saved
+
+  /discogs/sync:
+    post:
+      tags: [Discogs]
+      summary: Trigger collection sync + Plex matching
+      responses:
+        "202":
+          description: Sync started
+        "429":
+          description: Rate limited — retry later
+
+  /discogs/collection:
+    get:
+      tags: [Discogs]
+      summary: List collection with match status
+      parameters:
+        - name: status
+          in: query
+          schema:
+            enum: [matched, partial, not_on_plex]
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DiscogsCollectionItem"
+
+  /discogs/matches/{releaseId}:
+    patch:
+      tags: [Discogs]
+      summary: Manual match override
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                plexAlbumId: { type: string, nullable: true }
+                status:
+                  enum: [matched, partial, not_on_plex]
+      responses:
+        "200":
+          description: Updated
+
+  /lastfm/connection:
+    put:
+      tags: [Lastfm]
+      summary: Connect Last.fm (OAuth/session)
+      responses:
+        "200":
+          description: Connected
+    delete:
+      tags: [Lastfm]
+      summary: Disconnect Last.fm
+      responses:
+        "204":
+          description: Disconnected
+
+  /lastfm/scrobbles:
+    post:
+      tags: [Lastfm]
+      summary: Submit scrobble (server forwards to Last.fm)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScrobbleInput"
+      responses:
+        "201":
+          description: Submitted
+        "202":
+          description: Queued for retry
+
+  /lastfm/scrobbles/retry:
+    post:
+      tags: [Lastfm]
+      summary: Manual retry of pending scrobbles
+      responses:
+        "200":
+          description: Retry initiated
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Get app settings (non-secret)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppSettings"
+    patch:
+      tags: [Settings]
+      summary: Update settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppSettingsPatch"
+      responses:
+        "200":
+          description: Updated
+
+  /settings/reset:
+    post:
+      tags: [Settings]
+      summary: Clear credentials and stored data (FR-056)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targets:
+                  type: array
+                  items:
+                    enum: [plex, discogs, lastfm, collection, cache, scrobbles, all]
+      responses:
+        "204":
+          description: Cleared
+
+components:
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    ErrorBody:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+        code: { type: string }
+        action: { type: string, description: Suggested next step (SC-009) }
+
+    PlexConnectionInput:
+      type: object
+      required: [serverUrl, token]
+      properties:
+        serverUrl: { type: string, format: uri }
+        token: { type: string }
+        libraryIds:
+          type: array
+          items: { type: string }
+
+    PlexConnectionPublic:
+      type: object
+      properties:
+        serverUrl: { type: string }
+        tokenMasked: { type: string }
+        libraryIds: { type: array, items: { type: string } }
+        connected: { type: boolean }
+
+    PlexLibrary:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        type: { type: string }
+
+    Album:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        year: { type: integer }
+        artUrl: { type: string }
+        playCount: { type: integer }
+        pinned: { type: boolean }
+
+    AlbumPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Album"
+        total: { type: integer }
+        page: { type: integer }
+
+    Track:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        album: { type: string }
+        albumId: { type: string }
+        durationMs: { type: integer }
+        format:
+          enum: [flac, mp3, unsupported]
+        artUrl: { type: string }
+        playCount: { type: integer }
+
+    SearchResults:
+      type: object
+      properties:
+        albums: { type: array, items: { $ref: "#/components/schemas/Album" } }
+        tracks: { type: array, items: { $ref: "#/components/schemas/Track" } }
+
+    TopStats:
+      type: object
+      properties:
+        songs: { type: array, items: { $ref: "#/components/schemas/RankedSong" } }
+        albums: { type: array, items: { $ref: "#/components/schemas/RankedAlbum" } }
+        artists: { type: array, items: { $ref: "#/components/schemas/RankedArtist" } }
+
+    RankedSong:
+      type: object
+      properties:
+        track: { $ref: "#/components/schemas/Track" }
+        playCount: { type: integer }
+
+    RankedAlbum:
+      type: object
+      properties:
+        album: { $ref: "#/components/schemas/Album" }
+        playCount: { type: integer }
+
+    RankedArtist:
+      type: object
+      properties:
+        name: { type: string }
+        playCount: { type: integer }
+
+    DiscogsConnectionInput:
+      type: object
+      required: [username, token]
+      properties:
+        username: { type: string }
+        token: { type: string }
+
+    DiscogsCollectionItem:
+      type: object
+      properties:
+        releaseId: { type: integer }
+        title: { type: string }
+        artist: { type: string }
+        year: { type: integer }
+        format: { type: string }
+        matchStatus:
+          enum: [matched, partial, not_on_plex]
+        plexAlbumId: { type: string, nullable: true }
+
+    ScrobbleInput:
+      type: object
+      required: [track, artist, album, playedAt]
+      properties:
+        track: { type: string }
+        artist: { type: string }
+        album: { type: string }
+        playedAt: { type: string, format: date-time }
+        durationMs: { type: integer }
+
+    AppSettings:
+      type: object
+      properties:
+        matchingStrictness:
+          enum: [strict, fuzzy]
+        libraryRefreshPolicy:
+          enum: [manual, on_launch]
+        autoQueueSimilar: { type: boolean }
+        crossfade:
+          type: object
+          properties:
+            enabled: { type: boolean }
+            durationSec: { type: number }
+
+    AppSettingsPatch:
+      type: object
+      additionalProperties: true
