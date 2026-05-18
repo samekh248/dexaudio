@@ -1,6 +1,6 @@
 # Data Model: Plex Music Player (001-plex-music-player)
 
-**Date**: 2026-05-17  
+**Date**: 2026-05-18 (re-validated)  
 **Spec**: [spec.md](./spec.md) | **Plan**: [plan.md](./plan.md)
 
 Entities map to spec **Key Entities** and functional requirements. Storage column indicates where each record lives.
@@ -61,10 +61,11 @@ Entities map to spec **Key Entities** and functional requirements. Storage colum
 | plex_rating_key | text | Plex album ratingKey |
 | status | enum | `matched`, `partial`, `not_on_plex` |
 | confidence | numeric(3,2) | 0–1 |
+| match_candidates | jsonb | Plex album candidates when `status = partial` (FR-039); array of `{ id, title, artist }` |
 | manual_override | boolean | FR-037 |
 | matched_at | timestamptz | |
 
-**Rules**: Re-match on library refresh or strictness change (FR-038).
+**Rules**: Re-match on library refresh or strictness change (FR-038). Partial-match candidates exposed via `GET /discogs/collection` when status is `partial`.
 
 ---
 
@@ -91,6 +92,8 @@ Entities map to spec **Key Entities** and functional requirements. Storage colum
 | retry_count | int | |
 | expires_at | timestamptz | played_at + 24h (FR-084) |
 | status | enum | `pending`, `submitted`, `dropped` |
+
+**Dedup** (FR-088): Unique constraint or application logic on `(played_at, track_title, artist, album)` so client IndexedDB queue and server outbox never double-submit the same play event.
 
 ---
 

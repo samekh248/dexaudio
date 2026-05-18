@@ -38,9 +38,15 @@ cp backend/.env.example backend/.env
 # Edit: DATABASE_URL, APP_SECRET, optional GRAPHQL_ENABLED=true
 ```
 
-Run migrations:
+Run migrations (apply every file in `backend/drizzle/` in order):
 
 ```bash
+# CI and local Docker: apply all SQL migrations
+for f in backend/drizzle/*.sql; do
+  PGPASSWORD=dexaudio psql -h localhost -U dexaudio -d dexaudio -f "$f"
+done
+
+# Or, after scaffold:
 npm run db:migrate -w backend
 ```
 
