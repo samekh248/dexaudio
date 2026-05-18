@@ -60,10 +60,11 @@ export const discogsReleases = pgTable("discogs_releases", {
 
 export const collectionMatches = pgTable("collection_matches", {
   id: uuid("id").primaryKey().defaultRandom(),
-  discogsReleaseId: bigint("discogs_release_id", { mode: "number" }).notNull(),
+  discogsReleaseId: bigint("discogs_release_id", { mode: "number" }).notNull().unique(),
   plexRatingKey: text("plex_rating_key"),
   status: matchStatusEnum("status").notNull(),
   confidence: numeric("confidence", { precision: 3, scale: 2 }),
+  matchCandidates: jsonb("match_candidates"),
   manualOverride: boolean("manual_override").default(false).notNull(),
   matchedAt: timestamp("matched_at", { withTimezone: true }).defaultNow().notNull(),
 });

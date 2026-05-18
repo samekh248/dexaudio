@@ -66,4 +66,14 @@ describe("discogs-matcher", () => {
     );
     expect(result.confidence).toBeGreaterThan(0);
   });
+
+  it("returns up to three candidates for partial fuzzy matches", () => {
+    const result = matchRelease(
+      { id: 6, title: "Kid", artist: "Radiohead" },
+      albums,
+      "fuzzy",
+    );
+    expect(result.candidates.length).toBeGreaterThan(0);
+    expect(result.candidates.length).toBeLessThanOrEqual(3);
+  });
 });

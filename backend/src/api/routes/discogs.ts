@@ -47,6 +47,7 @@ export async function discogsRoutes(app: FastifyInstance) {
     return releases
       .map((r) => {
         const m = matchByRelease.get(r.discogsReleaseId);
+        const candidates = (m?.matchCandidates as { id: string; title: string; artist: string }[] | null) ?? [];
         return {
           releaseId: r.discogsReleaseId,
           title: r.title,
@@ -55,6 +56,8 @@ export async function discogsRoutes(app: FastifyInstance) {
           format: r.format ?? undefined,
           matchStatus: m?.status ?? ("not_on_plex" as const),
           plexAlbumId: m?.plexRatingKey ?? null,
+          matchCandidates:
+            m?.status === "partial" && candidates.length > 0 ? candidates : undefined,
         };
       })
       .filter((item) => !query.status || item.matchStatus === query.status);

@@ -1,10 +1,18 @@
 import type { Album } from "@dexaudio/shared-types";
 import type { DiscogsRelease } from "./discogs-client.js";
 
+export type MatchCandidate = {
+  id: string;
+  title: string;
+  artist: string;
+  score: number;
+};
+
 export type MatchResult = {
   status: "matched" | "partial" | "not_on_plex";
   confidence: number;
   plexRatingKey: string | null;
+  candidates: MatchCandidate[];
 };
 
 export function normalize(s: string): string {
@@ -15,6 +23,12 @@ export function normalize(s: string): string {
     .trim();
 }
 
+function scoreAlbum(releaseTitle: string, releaseArtist: string, album: Album): number {
+  const titleScore = similarity(releaseTitle, normalize(album.title));
+  const artistScore = similarity(releaseArtist, normalize(album.artist));
+  return titleScore * 0.6 + artistScore * 0.4;
+}
+
 export function matchRelease(
   release: DiscogsRelease,
   albums: Album[],
@@ -23,31 +37,44 @@ export function matchRelease(
   const releaseTitle = normalize(release.title);
   const releaseArtist = normalize(release.artist);
 
-  let best: MatchResult = { status: "not_on_plex", confidence: 0, plexRatingKey: null };
-
-  for (const album of albums) {
-    const albumTitle = normalize(album.title);
-    const albumArtist = normalize(album.artist);
-
-    if (strictness === "strict") {
-      if (albumTitle === releaseTitle && albumArtist === releaseArtist) {
-        return { status: "matched", confidence: 1, plexRatingKey: album.id };
-      }
-    } else {
-      const titleScore = similarity(releaseTitle, albumTitle);
-      const artistScore = similarity(releaseArtist, albumArtist);
-      const score = titleScore * 0.6 + artistScore * 0.4;
-      if (score > best.confidence) {
-        best = {
-          status: score >= 0.85 ? "matched" : score >= 0.6 ? "partial" : "not_on_plex",
-          confidence: score,
-          plexRatingKey: score >= 0.6 ? album.id : null,
+  if (strictness === "strict") {
+    for (const album of albums) {
+      if (normalize(album.title) === releaseTitle && normalize(album.artist) === releaseArtist) {
+        return {
+          status: "matched",
+          confidence: 1,
+          plexRatingKey: album.id,
+          candidates: [{ id: album.id, title: album.title, artist: album.artist, score: 1 }],
         };
       }
     }
+    return { status: "not_on_plex", confidence: 0, plexRatingKey: null, candidates: [] };
   }
 
-  return best;
+  const scored: MatchCandidate[] = [];
+  for (const album of albums) {
+    const score = scoreAlbum(releaseTitle, releaseArtist, album);
+    if (score >= 0.6) {
+      scored.push({ id: album.id, title: album.title, artist: album.artist, score });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const candidates = scored.slice(0, 3);
+
+  if (candidates.length === 0) {
+    return { status: "not_on_plex", confidence: 0, plexRatingKey: null, candidates: [] };
+  }
+
+  const best = candidates[0];
+  const status =
+    best.score >= 0.85 ? "matched" : best.score >= 0.6 ? "partial" : "not_on_plex";
+
+  return {
+    status,
+    confidence: best.score,
+    plexRatingKey: status === "not_on_plex" ? null : best.id,
+    candidates,
+  };
 }
 
 function similarity(a: string, b: string): number {

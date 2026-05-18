@@ -86,6 +86,15 @@ export const api = {
       `/discogs/collection${status ? `?status=${status}` : ""}`,
     ),
 
+  patchDiscogsMatch: (
+    releaseId: number,
+    body: { plexAlbumId?: string | null; status?: MatchStatus },
+  ) =>
+    request<{ ok: boolean }>(`/discogs/matches/${releaseId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+
   submitScrobble: (body: ScrobbleInput) =>
     request<{ queued?: boolean }>("/lastfm/scrobbles", { method: "POST", body: JSON.stringify(body) }),
 

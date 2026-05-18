@@ -4,6 +4,7 @@ import { api } from "@/services/api-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { getItem, StorageKeys } from "@/lib/local-storage";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function AlbumGridPage() {
   const libraryId = getItem(StorageKeys.activeLibraryId, "");
@@ -16,14 +17,37 @@ export function AlbumGridPage() {
 
   if (!libraryId) {
     return (
-      <p className="text-muted-foreground">
-        Connect Plex and select a library in <Link to="/settings" className="underline">Settings</Link>.
-      </p>
+      <EmptyState
+        title="No Plex library selected"
+        description="Connect your Plex server and choose a music library to browse albums."
+        actionLabel="Open Settings"
+        actionTo="/settings"
+      />
     );
   }
 
   if (isLoading) return <p>Loading albums…</p>;
-  if (error) return <p className="text-red-500">Failed to load albums</p>;
+  if (error) {
+    return (
+      <EmptyState
+        title="Could not load library"
+        description="Plex may be unreachable or your credentials need updating."
+        actionLabel="Check Plex settings"
+        actionTo="/settings"
+      />
+    );
+  }
+
+  if (!data?.items.length) {
+    return (
+      <EmptyState
+        title="No albums found"
+        description="This library has no music albums yet, or try refreshing from Settings."
+        actionLabel="Settings"
+        actionTo="/settings"
+      />
+    );
+  }
 
   return (
     <div>

@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { api } from "@/services/api-client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function SearchPage() {
   const [q, setQ] = useState("");
@@ -29,7 +30,13 @@ export function SearchPage() {
         <Button type="submit">Search</Button>
       </form>
       {isLoading && <p>Searching…</p>}
-      {data && (
+      {submitted && !isLoading && data && !data.albums.length && !data.tracks.length && (
+        <EmptyState
+          title="No results"
+          description={`Nothing matched "${submitted}". Try a different artist, album, or track name.`}
+        />
+      )}
+      {data && (data.albums.length > 0 || data.tracks.length > 0) && (
         <div className="grid gap-6 md:grid-cols-2">
           <section>
             <h2 className="font-semibold mb-2">Albums</h2>

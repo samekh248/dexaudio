@@ -82,9 +82,11 @@ export function usePlayer() {
         cb();
         return;
       }
+      const remainingSec = Math.max(0, howl.duration() - (howl.seek() as number));
+      const effectiveSec = Math.min(crossfade.durationSec, remainingSec);
       const from = howl.volume();
       const steps = 20;
-      const stepMs = (crossfade.durationSec * 1000) / steps;
+      const stepMs = (effectiveSec * 1000) / steps;
       let i = 0;
       const interval = setInterval(() => {
         i += 1;

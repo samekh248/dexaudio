@@ -1,7 +1,7 @@
 import { isScrobbleEligible, scrobbleExpiresAt } from "./scrobble-threshold.js";
 import { addPendingScrobble, getPendingScrobbles, removePendingScrobble } from "./indexed-db.js";
 import { api } from "@/services/api-client.js";
-import type { Track } from "@dexaudio/shared-types";
+import { scrobbleDedupKey, type Track } from "@dexaudio/shared-types";
 
 interface ActiveListen {
   track: Track;
@@ -35,7 +35,12 @@ export async function checkAndScrobble(): Promise<void> {
     });
   } catch {
     await addPendingScrobble({
-      id: crypto.randomUUID(),
+      id: scrobbleDedupKey({
+        playedAt,
+        track: track.title,
+        artist: track.artist,
+        album: track.album,
+      }),
       scrobble: {
         track: track.title,
         artist: track.artist,

@@ -68,14 +68,35 @@ export async function syncCollection(
         },
       });
 
+    const existingMatch = await db
+      .select()
+      .from(collectionMatches)
+      .where(eq(collectionMatches.discogsReleaseId, release.id))
+      .limit(1);
+    if (existingMatch[0]?.manualOverride) continue;
+
     const match = matchRelease(release, plexAlbums, strictness);
-    await db.insert(collectionMatches).values({
-      discogsReleaseId: release.id,
-      plexRatingKey: match.plexRatingKey,
-      status: match.status,
-      confidence: String(match.confidence),
-      manualOverride: false,
-    });
+    await db
+      .insert(collectionMatches)
+      .values({
+        discogsReleaseId: release.id,
+        plexRatingKey: match.plexRatingKey,
+        status: match.status,
+        confidence: String(match.confidence),
+        matchCandidates: match.candidates,
+        manualOverride: false,
+      })
+      .onConflictDoUpdate({
+        target: collectionMatches.discogsReleaseId,
+        set: {
+          plexRatingKey: match.plexRatingKey,
+          status: match.status,
+          confidence: String(match.confidence),
+          matchCandidates: match.candidates,
+          manualOverride: false,
+          matchedAt: new Date(),
+        },
+      });
   }
 
   await db
