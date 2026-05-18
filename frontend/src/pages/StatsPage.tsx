@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/services/api-client";
 import { Button } from "@/components/ui/button";
 import { TopTenList } from "@/components/stats/TopTenList";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 export function StatsPage() {
   const { data, isLoading, refetch, isFetching } = useQuery({
@@ -19,6 +20,13 @@ export function StatsPage() {
       </div>
       {isLoading ? (
         <p>Loading stats…</p>
+      ) : !data?.songs.length && !data?.albums.length && !data?.artists.length ? (
+        <EmptyState
+          title="No listening history yet"
+          description="Play some music on Plex through this app and your Top 10 lists will appear here."
+          actionLabel="Browse library"
+          actionTo="/"
+        />
       ) : (
         <div className="grid gap-6 md:grid-cols-3">
           <TopTenList title="Top songs" items={data?.songs.map((s) => ({ label: s.track.title, sub: s.track.artist, count: s.playCount })) ?? []} />

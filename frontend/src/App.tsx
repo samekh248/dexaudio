@@ -11,6 +11,7 @@ import { CollectionPage } from "@/pages/CollectionPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { PlexSetupPage } from "@/pages/onboarding/PlexSetupPage";
 import { useThemeSync } from "@/hooks/use-theme-sync";
+import { useLibraryRefreshOnLaunch } from "@/hooks/use-library-refresh";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -18,6 +19,7 @@ const queryClient = new QueryClient({
 
 function AppRoutes() {
   useThemeSync();
+  useLibraryRefreshOnLaunch();
   return (
     <Routes>
       <Route element={<AppShell />}>

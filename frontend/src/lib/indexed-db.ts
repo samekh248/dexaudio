@@ -81,6 +81,9 @@ export async function getAllCacheEntries(): Promise<CacheEntry[]> {
 
 export async function addPendingScrobble(item: PendingScrobble): Promise<void> {
   const db = await openDb();
+  const existing = await getPendingScrobbles();
+  if (existing.some((p) => p.id === item.id)) return;
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction("pending_scrobbles", "readwrite");
     tx.objectStore("pending_scrobbles").put(item);

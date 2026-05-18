@@ -206,6 +206,18 @@ Monorepo per [plan.md](./plan.md): `packages/shared-types/`, `backend/src/`, `fr
 
 ---
 
+## Phase 8: Spec analyze remediation (post–`/speckit-analyze` FR updates)
+
+**Purpose**: Close gaps from updated spec (FR-039, FR-061, FR-070, FR-074, FR-088)
+
+- [x] T095 [P] FR-088 scrobble dedup key + client/server queue dedup in `packages/shared-types/src/scrobble-key.ts`, `frontend/src/lib/scrobble-tracker.ts`, `backend/src/services/lastfm/scrobble-outbox.ts`
+- [x] T096 [US3] FR-039 partial-match candidates in `backend/src/services/discogs/matcher.ts`, migration `backend/drizzle/0001_match_candidates.sql`, `frontend/src/components/collection/PartialMatchPanel.tsx`
+- [x] T097 [US4] FR-061 library refresh on launch in `frontend/src/hooks/use-library-refresh.ts` + manual refresh in `LibrarySettingsSection.tsx`
+- [x] T098 [P] FR-070 empty states via `frontend/src/components/ui/EmptyState.tsx` on library, stats, collection, search pages
+- [x] T099 [P] FR-016 crossfade cap + FR-074 responsive shell in `use-player.ts` and `AppShell.tsx`
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies

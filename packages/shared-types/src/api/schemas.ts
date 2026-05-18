@@ -72,6 +72,14 @@ export type SearchResults = z.infer<typeof SearchResultsSchema>;
 export const MatchStatusSchema = z.enum(["matched", "partial", "not_on_plex"]);
 export type MatchStatus = z.infer<typeof MatchStatusSchema>;
 
+export const MatchCandidateSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  artist: z.string(),
+  score: z.number().optional(),
+});
+export type MatchCandidate = z.infer<typeof MatchCandidateSchema>;
+
 export const DiscogsCollectionItemSchema = z.object({
   releaseId: z.number().int(),
   title: z.string(),
@@ -80,6 +88,7 @@ export const DiscogsCollectionItemSchema = z.object({
   format: z.string().optional(),
   matchStatus: MatchStatusSchema,
   plexAlbumId: z.string().nullable().optional(),
+  matchCandidates: z.array(MatchCandidateSchema).optional(),
 });
 export type DiscogsCollectionItem = z.infer<typeof DiscogsCollectionItemSchema>;
 
