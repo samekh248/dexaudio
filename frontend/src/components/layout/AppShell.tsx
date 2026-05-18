@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { AccountWidget } from "@/components/layout/AccountWidget";
 
 const nav = [
   { to: "/", label: "Library" },
@@ -19,6 +20,8 @@ export function AppShell() {
           <Link to="/" className="text-lg font-bold tracking-tight">
             Dexaudio
           </Link>
+          <div className="flex flex-wrap items-center gap-3">
+          <AccountWidget />
           <nav className="flex flex-wrap gap-1">
             {nav.map((item) => (
               <Link
@@ -33,6 +36,7 @@ export function AppShell() {
               </Link>
             ))}
           </nav>
+          </div>
         </div>
       </header>
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6">

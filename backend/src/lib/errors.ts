@@ -31,3 +31,15 @@ export class ValidationError extends AppError {
     super(message, 400, "VALIDATION_ERROR", action);
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message = "Authentication required", action?: string) {
+    super(message, 401, "UNAUTHORIZED", action);
+  }
+}
+
+export class BadGatewayError extends AppError {
+  constructor(message: string, action?: string) {
+    super(message, 502, "BAD_GATEWAY", action);
+  }
+}

@@ -48,13 +48,57 @@ export const PlexConnectionInputSchema = z.object({
 });
 export type PlexConnectionInput = z.infer<typeof PlexConnectionInputSchema>;
 
+export const PlexAccountIdentitySchema = z.object({
+  username: z.string(),
+  avatarUrl: z.string().url().nullable().optional(),
+  email: z.string().email().nullable().optional(),
+});
+export type PlexAccountIdentity = z.infer<typeof PlexAccountIdentitySchema>;
+
 export const PlexConnectionPublicSchema = z.object({
   serverUrl: z.string().optional(),
+  serverName: z.string().nullable().optional(),
+  machineIdentifier: z.string().nullable().optional(),
   tokenMasked: z.string().optional(),
   libraryIds: z.array(z.string()).optional(),
   connected: z.boolean(),
+  account: PlexAccountIdentitySchema.optional(),
 });
 export type PlexConnectionPublic = z.infer<typeof PlexConnectionPublicSchema>;
+
+export const PlexPinCreatedSchema = z.object({
+  pinId: z.number().int(),
+  pinCode: z.string(),
+  authUrl: z.string().url(),
+});
+export type PlexPinCreated = z.infer<typeof PlexPinCreatedSchema>;
+
+export const PlexPinStatusSchema = z.object({
+  authorized: z.boolean(),
+  expired: z.boolean().optional(),
+});
+export type PlexPinStatus = z.infer<typeof PlexPinStatusSchema>;
+
+export const PlexServerInfoSchema = z.object({
+  machineIdentifier: z.string(),
+  name: z.string(),
+  owned: z.boolean(),
+  online: z.boolean(),
+  sourceTitle: z.string().nullable().optional(),
+});
+export type PlexServerInfo = z.infer<typeof PlexServerInfoSchema>;
+
+export const PlexAuthCompleteInputSchema = z.object({
+  machineIdentifier: z.string().min(1),
+  libraryIds: z.array(z.string()).min(1),
+});
+export type PlexAuthCompleteInput = z.infer<typeof PlexAuthCompleteInputSchema>;
+
+export const PlexAuthCompleteResultSchema = z.object({
+  connection: PlexConnectionPublicSchema,
+  dataWiped: z.boolean(),
+});
+export type PlexAuthCompleteResult = z.infer<typeof PlexAuthCompleteResultSchema>;
 
 export const PlexLibrarySchema = z.object({
   id: z.string(),

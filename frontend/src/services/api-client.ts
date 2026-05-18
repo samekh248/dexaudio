@@ -4,9 +4,15 @@ import type {
   AppSettings,
   DiscogsCollectionItem,
   MatchStatus,
+  PlexAccountIdentity,
+  PlexAuthCompleteInput,
+  PlexAuthCompleteResult,
   PlexConnectionInput,
   PlexConnectionPublic,
   PlexLibrary,
+  PlexPinCreated,
+  PlexPinStatus,
+  PlexServerInfo,
   ScrobbleInput,
   SearchResults,
   TopStats,
@@ -28,10 +34,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const hasBody = init?.body != null && init.body !== "";
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...(hasBody ? { "Content-Type": "application/json" } : {}),
       ...init?.headers,
     },
   });
@@ -54,6 +61,15 @@ export const api = {
   savePlexConnection: (body: PlexConnectionInput) =>
     request<PlexConnectionPublic>("/plex/connection", { method: "PUT", body: JSON.stringify(body) }),
   getLibraries: () => request<PlexLibrary[]>("/plex/libraries"),
+
+  createPlexPin: () => request<PlexPinCreated>("/plex/auth/pin", { method: "POST" }),
+  getPlexPinStatus: (pinId: number) => request<PlexPinStatus>(`/plex/auth/pin/${pinId}/status`),
+  getPlexAuthServers: () => request<PlexServerInfo[]>("/plex/auth/servers"),
+  getPlexAuthServerLibraries: (machineId: string) =>
+    request<PlexLibrary[]>(`/plex/auth/servers/${encodeURIComponent(machineId)}/libraries`),
+  completePlexAuth: (body: PlexAuthCompleteInput) =>
+    request<PlexAuthCompleteResult>("/plex/auth/complete", { method: "POST", body: JSON.stringify(body) }),
+  getPlexAccount: () => request<PlexAccountIdentity>("/plex/account"),
 
   getAlbums: (libraryId: string, page = 1, pageSize = 48) =>
     request<AlbumPage>(`/library/albums?libraryId=${libraryId}&page=${page}&pageSize=${pageSize}`),

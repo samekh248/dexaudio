@@ -1,0 +1,358 @@
+openapi: 3.1.0
+info:
+  title: Dex Audio — Plex Auth Workflow
+  version: 0.1.0
+  description: |
+    New and modified REST endpoints for the Plex PIN-based OAuth auth workflow.
+    These endpoints extend the existing `/api/v1/plex/*` surface.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /plex/auth/pin:
+    post:
+      operationId: createPlexPin
+      summary: Create a Plex auth PIN
+      description: |
+        Creates a PIN via plex.tv and returns the PIN code and auth URL.
+        The frontend opens the auth URL in a new browser window.
+      tags: [plex-auth]
+      responses:
+        "200":
+          description: PIN created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexPinCreated"
+        "502":
+          description: plex.tv unreachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/auth/pin/{pinId}/status:
+    get:
+      operationId: getPlexPinStatus
+      summary: Poll PIN authorization status
+      description: |
+        Checks whether the user has completed sign-in at plex.tv.
+        The frontend polls this endpoint at ~1-2s intervals.
+        When authorized, the backend stores the encrypted token and
+        fetches account identity (username, avatar, email).
+      tags: [plex-auth]
+      parameters:
+        - name: pinId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PIN status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexPinStatus"
+        "404":
+          description: PIN not found or expired
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/auth/servers:
+    get:
+      operationId: listPlexServers
+      summary: List Plex servers for the authenticated account
+      description: |
+        Returns all Plex servers associated with the authenticated account,
+        filtered to devices that provide "server". Requires a successful
+        PIN authorization first (token stored on backend).
+      tags: [plex-auth]
+      responses:
+        "200":
+          description: List of servers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlexServerInfo"
+        "401":
+          description: No auth token available (PIN flow not completed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/auth/servers/{machineId}/libraries:
+    get:
+      operationId: listPlexServerLibraries
+      summary: List music libraries on a specific server
+      description: |
+        Connects to the selected Plex server and returns its music-type
+        library sections. Uses the per-server access token from resources.
+      tags: [plex-auth]
+      parameters:
+        - name: machineId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Server machine identifier (clientIdentifier)
+      responses:
+        "200":
+          description: List of music libraries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlexLibrary"
+        "404":
+          description: Server not found or offline
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/auth/complete:
+    post:
+      operationId: completePlexAuth
+      summary: Finalize Plex connection
+      description: |
+        Saves the selected server and library IDs. If the server or account
+        differs from the current connection, triggers a full data wipe
+        before saving. Returns the public connection info.
+      tags: [plex-auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlexAuthCompleteInput"
+      responses:
+        "200":
+          description: Connection saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexAuthCompleteResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/account:
+    get:
+      operationId: getPlexAccount
+      summary: Get Plex account identity
+      description: |
+        Returns the stored Plex account identity (username, avatar URL)
+        for display in the UI sidebar/header and Settings.
+      tags: [plex-auth]
+      responses:
+        "200":
+          description: Account identity
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexAccountIdentity"
+        "404":
+          description: No Plex connection configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /plex/connection:
+    get:
+      operationId: getPlexConnection
+      summary: Get current Plex connection status (modified)
+      description: |
+        Returns the current Plex connection public info.
+        **Modified**: Now includes `serverName`, `machineIdentifier`,
+        and `account` (username, avatar) in the response.
+      tags: [plex-connection]
+      responses:
+        "200":
+          description: Connection info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexConnectionPublicV2"
+
+    put:
+      operationId: savePlexConnection
+      summary: Save Plex connection (deprecated for new auth)
+      description: |
+        **Deprecated**: This endpoint accepted a raw token. It will be
+        removed once the auth workflow is the sole entry point.
+        Retained temporarily for backward compatibility during migration.
+      tags: [plex-connection]
+      deprecated: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlexConnectionInput"
+      responses:
+        "200":
+          description: Connection saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlexConnectionPublicV2"
+
+components:
+  schemas:
+    ErrorBody:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        action:
+          type: string
+
+    PlexPinCreated:
+      type: object
+      required: [pinId, pinCode, authUrl]
+      properties:
+        pinId:
+          type: integer
+          description: Plex PIN ID for polling
+        pinCode:
+          type: string
+          description: Plex PIN code
+        authUrl:
+          type: string
+          format: uri
+          description: Full URL to open in browser for user sign-in
+
+    PlexPinStatus:
+      type: object
+      required: [authorized]
+      properties:
+        authorized:
+          type: boolean
+          description: Whether the user has completed authorization
+        expired:
+          type: boolean
+          description: Whether the PIN has expired (30-minute Plex limit)
+
+    PlexServerInfo:
+      type: object
+      required: [machineIdentifier, name, owned, online]
+      properties:
+        machineIdentifier:
+          type: string
+          description: Stable server identifier
+        name:
+          type: string
+          description: Server display name
+        owned:
+          type: boolean
+          description: Whether the authenticated user owns this server
+        online:
+          type: boolean
+          description: Whether the server is currently reachable
+        sourceTitle:
+          type: string
+          nullable: true
+          description: Owner's username (for shared servers)
+
+    PlexLibrary:
+      type: object
+      required: [id, title, type]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        type:
+          type: string
+
+    PlexAuthCompleteInput:
+      type: object
+      required: [machineIdentifier, libraryIds]
+      properties:
+        machineIdentifier:
+          type: string
+          description: Selected server machine identifier
+        libraryIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: Selected music library section IDs
+
+    PlexAuthCompleteResult:
+      type: object
+      required: [connection, dataWiped]
+      properties:
+        connection:
+          $ref: "#/components/schemas/PlexConnectionPublicV2"
+        dataWiped:
+          type: boolean
+          description: Whether existing data was wiped due to server/account change
+
+    PlexAccountIdentity:
+      type: object
+      required: [username]
+      properties:
+        username:
+          type: string
+        avatarUrl:
+          type: string
+          format: uri
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+
+    PlexConnectionPublicV2:
+      type: object
+      required: [connected]
+      properties:
+        serverUrl:
+          type: string
+        serverName:
+          type: string
+          nullable: true
+        machineIdentifier:
+          type: string
+          nullable: true
+        tokenMasked:
+          type: string
+        libraryIds:
+          type: array
+          items:
+            type: string
+        connected:
+          type: boolean
+        account:
+          $ref: "#/components/schemas/PlexAccountIdentity"
+
+    PlexConnectionInput:
+      type: object
+      required: [serverUrl, token]
+      properties:
+        serverUrl:
+          type: string
+          format: uri
+        token:
+          type: string
+          minLength: 1
+        libraryIds:
+          type: array
+          items:
+            type: string

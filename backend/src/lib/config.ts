@@ -12,6 +12,10 @@ const envSchema = z.object({
 
 export type AppConfig = z.infer<typeof envSchema>;
 
+/** Stable Plex client identifier (FR-019); must not change between releases. */
+export const PLEX_CLIENT_ID = "dex-audio-player";
+export const PLEX_PRODUCT_NAME = "Dex Audio";
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   return envSchema.parse({
     DATABASE_URL: env.DATABASE_URL,
