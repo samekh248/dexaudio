@@ -112,6 +112,7 @@ As a music collector who tracks vinyl/CD releases on Discogs, I want the applica
 4. **Given** a Discogs release has no corresponding album on Plex, **When** the user views that release, **Then** the user sees a clear "Not on Plex" indicator.
 5. **Given** the user wants to update their collection, **When** the user triggers a re-sync, **Then** newly added Discogs items are pulled and re-matched against the current Plex library.
 6. **Given** the user filters the collection view, **When** the user selects "Not on Plex", **Then** only unmatched releases are shown (so the user can see gaps in their digital library).
+7. **Given** a Discogs release has Partial Match status, **When** the user views that release, **Then** the user sees candidate Plex album(s), can confirm one to promote to Matched, or mark as Not on Plex.
 
 ---
 
@@ -121,11 +122,11 @@ As the operator of this personal application, I want a dedicated settings/admin 
 
 **Why this priority**: A minimal settings flow is implicit in Story 1 (the user must somehow provide the Plex server). A dedicated, comprehensive admin area is required by the user but can begin as the simple Plex setup and expand alongside Stories 2 and 3. P2 reflects that it is required for a complete v1 but can be incrementally built.
 
-**Independent Test**: From any screen in the application, the user can open a Settings area and find clearly labeled sections for Plex, Discogs, Playback, Library, and Matching. Changing a value in any section and saving it persists across application restarts and immediately affects the relevant behavior (e.g., changing the Plex server reconnects to the new server).
+**Independent Test**: From any screen in the application, the user can open a Settings area and find clearly labeled sections for Plex Server, Discogs, Last.fm, Playback, Library, Matching, Storage, and Appearance. Changing a value in any section and saving it persists across application restarts and immediately affects the relevant behavior (e.g., changing the Plex server reconnects to the new server; changing library refresh policy controls automatic vs. manual Plex library refresh).
 
 **Acceptance Scenarios**:
 
-1. **Given** the user is anywhere in the application, **When** the user opens Settings, **Then** the user sees clearly grouped sections for: Plex Server, Discogs, Playback, Library, and Matching.
+1. **Given** the user is anywhere in the application, **When** the user opens Settings, **Then** the user sees clearly grouped sections for: Plex Server, Discogs, Last.fm, Playback, Library, Matching, Storage, and Appearance.
 2. **Given** the user updates the Plex server URL or credentials, **When** the user saves, **Then** the application validates the new connection and uses it for subsequent requests, or reports a clear error if the new connection fails.
 3. **Given** the user updates Discogs credentials/username, **When** the user saves, **Then** subsequent Discogs syncs use the new credentials.
 4. **Given** the user updates a playback preference (e.g., preferred format priority, crossfade on/off, default volume), **When** the user saves, **Then** the preference takes effect on the next playback action.
@@ -153,7 +154,7 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **Concurrent playback on another Plex client**: This application does not assume exclusive playback; it does not interfere with other Plex clients.
 - **Settings change while a track is playing**: Playback is not interrupted by unrelated setting changes; reconnect-triggering changes (e.g., switching Plex servers) prompt the user before disrupting playback.
 - **Auto-queue cannot find similar songs** (e.g., very niche artist, small library): The application stops playback cleanly at the end of the queue and surfaces a non-blocking notice that no similar songs were found.
-- **User manually selects new content while auto-queue is mid-track**: The currently playing auto-queued track is allowed to finish (or the user can skip it); subsequent auto-queued items are removed before the user's new selections play.
+- **User invokes "Play now" while an auto-queued track is playing**: The current track is replaced immediately by the new selection (per FR-014); all remaining auto-queued items are removed; user-added queue items are preserved. The user may still skip manually without invoking "Play now".
 - **Crossfade duration longer than remaining track length**: The application caps the effective crossfade at the shorter of the configured duration or the remaining audio of either track to avoid premature cutoffs.
 - **Plex unreachable but pinned content is cached**: Pinned items continue to play from the permanent cache; browsing falls back to the cached library view; non-pinned items show as unplayable until Plex is reachable.
 - **Cache write fails mid-download** (network drops, storage full mid-write): The partial file is discarded and not used for playback; the application falls back to streaming for the affected track and retries the cache fetch later.
@@ -191,7 +192,7 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **FR-013**: When the "auto-queue similar songs" setting is enabled and only 1 track remains in the queue, the application MUST pre-fetch and append a set of similar songs to the queue so playback continues seamlessly with no audible gap. Similar songs MUST be sourced from Plex's built-in sonically-similar / radio recommendations, seeded from the last played track, and limited to tracks present in the user's connected Plex library. When the setting is disabled, playback MUST stop cleanly at the end of the queue with no auto-additions.
 - **FR-014**: Every album and track in the UI MUST expose two explicit actions: "Play now" and "Add to queue". "Play now" MUST replace the currently playing track with the new selection, remove all auto-queued items from the queue, and preserve any user-added items already in the queue. "Add to queue" MUST append the selection to the end of the current queue without interrupting playback. The application MUST NOT implicitly replace the queue on a single click.
 - **FR-015**: The application MUST clearly distinguish auto-queued items from user-added items in the queue view (e.g., a visual indicator).
-- **FR-016**: The application MUST support optional crossfade between consecutive tracks, controlled by a user setting (on/off and duration). When disabled, tracks transition without overlap.
+- **FR-016**: The application MUST support optional crossfade between consecutive tracks, controlled by a user setting (on/off and duration). When disabled, tracks transition without overlap. When enabled, the effective crossfade duration MUST be capped at the shorter of the configured duration and the remaining audio of either the outgoing or incoming track, so neither track is cut off prematurely.
 - **FR-017**: The user interface MUST be album-centric:
   - The default library landing view MUST be an album grid (album cover art as the primary visual element).
   - Artist pages MUST drill into the list of that artist's albums; there MUST NOT be a flat "all tracks by this artist" view at the artist level (drilling further into an album reveals its tracks).
@@ -200,7 +201,7 @@ As the operator of this personal application, I want a dedicated settings/admin 
 
 #### Media Caching
 
-- **FR-018**: The application MUST maintain two independent on-device caches: (a) a **pre-cache** for automatic queue look-ahead, and (b) a **permanent cache** for user-pinned items. Each cache has its own user-configurable size cap (in GB) with a sensible default.
+- **FR-018**: The application MUST maintain two independent on-device caches: (a) a **pre-cache** for automatic queue look-ahead, and (b) a **permanent cache** for user-pinned items. Each cache has its own user-configurable size cap (in GB). First-run defaults MUST be: pre-cache **2 GB**, permanent cache **10 GB**.
 - **FR-019**: When a track is to be played, the application MUST first check both caches for a valid (non-stale) copy and play the cached copy when present, instead of streaming from Plex.
 - **FR-020**: The pre-cache MUST automatically download the next N upcoming tracks in the playback queue, where N is a user-configurable setting (default behavior: a small look-ahead, e.g., 1–10 tracks). The pre-cache MUST update as the queue changes (e.g., advance, reorder, replace).
 - **FR-021**: The pre-cache MUST evict its own items using a least-recently-used (LRU) policy when its size cap is reached. It MUST NOT evict items from the permanent cache.
@@ -228,9 +229,10 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **FR-033**: The application MUST display the collection with at least: release title, artist, year, and physical format (Vinyl, CD, etc.).
 - **FR-034**: The application MUST match each Discogs release against the connected Plex music library and assign a match status (e.g., Matched, Partial Match, Not on Plex).
 - **FR-035**: For matched releases, the application MUST provide a one-click path from the collection entry to the corresponding Plex album, ready to play.
-- **FR-036**: The application MUST allow the user to filter the collection by match status (e.g., "Show only items not on Plex").
+- **FR-036**: The application MUST allow the user to filter the collection by match status: Matched, Partial Match, and Not on Plex (including "show only" variants such as gaps in the digital library).
 - **FR-037**: The application MUST allow the user to manually override a match (confirm an ambiguous match, or clear an incorrect match).
 - **FR-038**: The application MUST support re-syncing the Discogs collection on demand and incrementally re-matching against the current Plex library.
+- **FR-039**: For releases with match status **Partial Match**, the application MUST display a distinct "Partial Match" indicator, show which Plex album(s) were candidates, and allow the user to confirm one candidate (promoting to Matched) or mark as Not on Plex. The collection filter MUST include Partial Match alongside Matched and Not on Plex.
 
 #### Settings / Admin Area
 
@@ -243,16 +245,17 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **FR-056**: The user MUST be able to clear/reset credentials and stored data (Plex config, Discogs config, Last.fm session, synced collection, cached library, pending scrobble queue).
 - **FR-057**: The Matching section MUST allow the user to choose a matching strictness (e.g., strict vs. fuzzy) for Discogs-to-Plex matching.
 - **FR-058**: The Playback section MUST include a toggle for "auto-queue similar songs" and a toggle plus duration control for "crossfade".
-- **FR-059**: The Playback section MUST include a numeric control for the pre-cache look-ahead size (number of upcoming tracks to keep cached).
-- **FR-060**: The Storage section MUST include configurable size caps (in GB) for both the pre-cache and the permanent cache, with sensible defaults applied on first run.
+- **FR-059**: The Playback section MUST include a numeric control for the pre-cache look-ahead size (number of upcoming tracks to keep cached). The first-run default MUST be **3** upcoming tracks (valid range: 1–10).
+- **FR-060**: The Storage section MUST include configurable size caps (in GB) for both the pre-cache and the permanent cache, with first-run defaults per FR-018 (2 GB pre-cache, 10 GB permanent).
+- **FR-061**: The Library section MUST allow the user to choose when the Plex music library is refreshed: **manual only** (user triggers refresh) or **on application launch** (automatic refresh each time the app starts). The chosen policy MUST persist and apply to all subsequent sessions until changed.
 
 #### Cross-cutting
 
-- **FR-070**: The application MUST present clear empty states and error states (no infinite spinners, no silent failures).
+- **FR-070**: The application MUST present clear empty states and error states everywhere user-facing data can be absent or fail (no infinite spinners, no silent failures). At minimum this MUST cover: album library browse, Top 10 statistics, Discogs collection, playback queue, search results, and each Settings section when its backing service is disconnected or unconfigured. Each empty state MUST explain why content is missing and offer at least one next action where applicable (e.g., connect Plex, trigger sync, refresh library).
 - **FR-071**: The application MUST not interfere with other Plex clients or alter library data on the Plex server (beyond what is required for playback reporting that Plex itself performs).
 - **FR-072**: The application MUST function for a single primary user (the operator who configures it).
 - **FR-073**: The application MUST be delivered as a web application that runs in a modern desktop browser, AND MUST be installable as a desktop application (e.g., a PWA / installable web app) so it can launch in its own window without browser chrome.
-- **FR-074**: The application layout MUST remain functional and readable on smaller viewports (e.g., a phone-sized browser window) even though mobile is not a primary target in v1 — no element may overflow off-screen and core actions (browse albums, play, view queue, open settings) MUST remain reachable.
+- **FR-074**: The application layout MUST remain functional and readable on viewports down to **320 px** width even though mobile is not a primary target in v1 — no element may overflow off-screen and core actions (browse albums, play, view queue, open settings) MUST remain reachable without horizontal scrolling.
 
 #### Appearance & Theming
 
@@ -271,7 +274,8 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **FR-081**: Scrobbles MUST follow last.fm's official rules: only tracks longer than 30 seconds are eligible; a track is scrobbled once it has been played for at least 50% of its duration OR at least 4 minutes of playback, whichever comes first.
 - **FR-082**: The application MUST NOT call last.fm's "Now Playing" endpoint. Only scrobbles (per FR-081) are submitted.
 - **FR-083**: The application MUST NOT scrobble plays occurring on other Plex clients; scrobbling is scoped strictly to playback events originating in this application.
-- **FR-084**: When last.fm is unreachable or a scrobble submission fails, the application MUST queue the scrobble locally and retry submission with backoff. The queue MUST persist across application restarts. Scrobbles MUST be retried for up to 24 hours from the time of the original play event; after 24 hours, the queued scrobble is dropped.
+- **FR-084**: When last.fm is unreachable or a scrobble submission fails, the application MUST queue the scrobble locally and retry submission with backoff. The queue MUST persist across application restarts (client-side durable store). Scrobbles MUST be retried for up to 24 hours from the time of the original play event; after 24 hours, the queued scrobble is dropped.
+- **FR-088**: Pending scrobbles MUST use a **client-primary** queue on the device (survives restarts and offline playback) with an optional **server-side backup outbox** for durability when the backend is reachable. Each scrobble MUST be submitted at most once to last.fm (deduplicate by play-start timestamp + track identity across client and server queues). When both queues hold the same event, the client queue is authoritative for submission order.
 - **FR-085**: Plays that occur while last.fm is unreachable (e.g., offline playback of pinned items) MUST be queued and submitted to last.fm in original-play-event order when connectivity returns, subject to the 24-hour retry window.
 - **FR-086**: The application MUST surface a Last.fm Settings section with: authentication (connect / disconnect), connection status, the current pending-scrobble queue count, and manual "Retry now" and "Clear queue" actions. The Last.fm session credential MUST be treated as sensitive per FR-053 and FR-054.
 - **FR-087**: The in-app Top 10 statistics MUST continue to be sourced exclusively from Plex play history; last.fm is outbound-only and MUST NOT be used as a source for any in-app statistic in v1.
@@ -288,13 +292,13 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **Discogs Account**: The user-configured Discogs credentials and username used to pull the physical collection.
 - **Physical Release**: An item in the user's Discogs collection, with title, artist, year, and physical format (Vinyl, CD, etc.).
 - **Collection Match**: A relationship between a Physical Release and a Plex Album, with a status (Matched / Partial / Not on Plex) and optional manual override.
-- **Settings**: Persistent configuration grouped into Plex, Discogs, Playback, Library, Matching, and Storage sections.
+- **Settings**: Persistent configuration grouped into Plex Server, Discogs, Last.fm, Playback, Library, Matching, Storage, and Appearance sections (per FR-051).
 - **Cache Entry**: A locally stored copy of a track's audio bytes, with the source track identifier, a version signal (size/hash/last-modified) for staleness checks, and a `cache_kind` of either `pre-cache` or `permanent`.
 - **Pin**: A user-created assertion that an item should live in the permanent cache. Has a `pin_level` of `track`, `album`, or `artist`, and resolves to a set of underlying track Cache Entries that the application keeps populated.
 - **Cache Configuration**: User-controlled values: pre-cache size cap (GB), permanent-cache size cap (GB), pre-cache look-ahead count (number of upcoming tracks).
 - **Last.fm Account**: The user-configured last.fm authentication state (session credential and connection status) used to submit scrobbles. Treated as a sensitive credential.
 - **Scrobble**: A record of a play event that meets last.fm's scrobble rules (track >30s, played ≥50% or ≥4 minutes). Each scrobble carries the track identity (title, artist, album) and the timestamp at which the play started.
-- **Pending Scrobble Queue**: An ordered, durable queue of Scrobble records that have not yet been successfully submitted to last.fm. Items remain in the queue with retry/backoff for up to 24 hours from the original play event, then are dropped.
+- **Pending Scrobble Queue**: An ordered, durable client-side queue of Scrobble records not yet successfully submitted to last.fm, with an optional server-side backup outbox (FR-088). Items remain in the queue with retry/backoff for up to 24 hours from the original play event, then are dropped. Submissions are deduplicated by play-start timestamp and track identity.
 - **Theme Selection**: The currently active theme mode (Sync to device / Light / Dark / Custom) plus, when Custom is active, the identifier of the active Custom Theme Preset.
 - **Custom Theme Preset**: A user-named record holding six color values, one per named slot (Background, Surface, Primary Text, Secondary Text, Accent, Now-Playing Highlight). The user keeps up to a small fixed number of presets and switches between them.
 
@@ -309,7 +313,7 @@ As the operator of this personal application, I want a dedicated settings/admin 
 - **SC-005**: Each of the three Top 10 lists loads and renders within 2 seconds of opening the statistics view on a library with up to 50,000 tracks.
 - **SC-006**: Syncing a Discogs collection of up to 2,000 releases completes within 5 minutes on a typical home network, including matching against the Plex library.
 - **SC-007**: For a representative Discogs collection, at least 90% of releases that exist on Plex are auto-matched correctly without manual intervention.
-- **SC-008**: Users can locate and change any of the documented settings (Plex, Discogs, Playback, Library, Matching) within 60 seconds of opening Settings, without needing external documentation.
+- **SC-008**: Users can locate and change any of the documented settings (Plex Server, Discogs, Last.fm, Playback, Library, Matching, Storage, Appearance) within 60 seconds of opening Settings, without needing external documentation.
 - **SC-009**: 100% of user-visible errors (e.g., bad credentials, server unreachable, sync failure) display a clear message and at least one suggested next action.
 - **SC-010**: No stored credential is visible in plain text in the UI by default.
 - **SC-011**: When a track is played from cache, audio begins within 1 second of hitting Play on a typical device.
