@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../../lib/config.js";
 import { healthRoutes } from "./health.js";
 import { plexRoutes } from "./plex.js";
+import { plexAuthRoutes } from "./plex-auth.js";
 import { libraryRoutes } from "./library.js";
 import { streamRoutes } from "./stream.js";
 import { playbackRoutes } from "./playback.js";
@@ -15,6 +16,7 @@ export async function registerRoutes(app: FastifyInstance, config: AppConfig) {
     async (api) => {
       await healthRoutes(api);
       await plexRoutes(api);
+      await plexAuthRoutes(api);
       await libraryRoutes(api);
       await streamRoutes(api);
       await playbackRoutes(api);

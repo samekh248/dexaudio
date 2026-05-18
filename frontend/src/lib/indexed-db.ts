@@ -102,6 +102,17 @@ export async function getPendingScrobbles(): Promise<PendingScrobble[]> {
   });
 }
 
+export async function clearAllClientData(): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(["cache_entries", "pending_scrobbles"], "readwrite");
+    tx.objectStore("cache_entries").clear();
+    tx.objectStore("pending_scrobbles").clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export async function removePendingScrobble(id: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {

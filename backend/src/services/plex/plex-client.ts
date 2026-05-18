@@ -4,37 +4,70 @@ import type { Album, PlexLibrary, Track } from "@dexaudio/shared-types";
 export interface PlexConfig {
   serverUrl: string;
   token: string;
+  machineIdentifier?: string;
 }
 
 function normalizeUrl(url: string): string {
   return url.replace(/\/$/, "");
 }
 
-export async function validateConnection(config: PlexConfig): Promise<boolean> {
+export async function validateConnection(config: PlexConfig, timeoutMs = 4000): Promise<boolean> {
   const base = normalizeUrl(config.serverUrl);
-  const res = await fetch(`${base}/identity?X-Plex-Token=${encodeURIComponent(config.token)}`);
-  return res.ok;
+  try {
+    const res = await fetchWithTimeout(
+      `${base}/identity?X-Plex-Token=${encodeURIComponent(config.token)}`,
+      timeoutMs,
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function fetchLibraries(config: PlexConfig): Promise<PlexLibrary[]> {
   const base = normalizeUrl(config.serverUrl);
-  const res = await fetch(`${base}/library/sections?X-Plex-Token=${encodeURIComponent(config.token)}`);
+  const res = await fetchWithTimeout(
+    `${base}/library/sections?X-Plex-Token=${encodeURIComponent(config.token)}`,
+    10000,
+  );
   if (!res.ok) throw new ValidationError("Could not reach Plex server", "Check URL and token");
   const xml = await res.text();
   return parseLibrariesXml(xml);
 }
 
+async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export function parseLibrariesXml(xml: string): PlexLibrary[] {
   const libraries: PlexLibrary[] = [];
-  const regex = /<Directory[^>]*key="(\d+)"[^>]*title="([^"]*)"[^>]*type="([^"]*)"/g;
+  const dirRegex = /<Directory\b([^>]*?)\/?>/g;
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(xml)) !== null) {
-    const [, id, title, type] = match;
-    if (type === "artist") {
-      libraries.push({ id, title, type });
-    }
+  while ((match = dirRegex.exec(xml)) !== null) {
+    const attrs = parseDirAttrs(match[1]);
+    if (attrs.type !== "artist") continue;
+    const id = attrs.key;
+    const title = attrs.title;
+    if (!id || !title) continue;
+    libraries.push({ id, title, type: attrs.type });
   }
   return libraries;
+}
+
+function parseDirAttrs(attrString: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  const re = /(\w+)="([^"]*)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(attrString)) !== null) {
+    attrs[m[1]] = m[2];
+  }
+  return attrs;
 }
 
 export function parseTrackFromMetadata(attrs: Record<string, string>): Track {
