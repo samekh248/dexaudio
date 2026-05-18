@@ -37,7 +37,10 @@ jobs:
         env:
           DATABASE_URL: postgresql://dexaudio:dexaudio@localhost:5432/dexaudio
         run: |
-          PGPASSWORD=dexaudio psql -h localhost -U dexaudio -d dexaudio -f backend/drizzle/0000_init.sql || true
+          for f in backend/drizzle/*.sql; do
+            echo "Applying $f"
+            PGPASSWORD=dexaudio psql -h localhost -U dexaudio -d dexaudio -f "$f"
+          done
 
       - name: Frontend coverage
         run: npm run test:coverage -w frontend

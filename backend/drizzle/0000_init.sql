@@ -35,9 +35,12 @@ CREATE TABLE IF NOT EXISTS "collection_matches" (
   "plex_rating_key" text,
   "status" "match_status" NOT NULL,
   "confidence" numeric(3, 2),
+  "match_candidates" jsonb,
   "manual_override" boolean DEFAULT false NOT NULL,
   "matched_at" timestamp with time zone DEFAULT now() NOT NULL
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS "collection_matches_discogs_release_id_unique" ON "collection_matches" ("discogs_release_id");
 
 CREATE TABLE IF NOT EXISTS "lastfm_accounts" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

@@ -51,11 +51,13 @@ if ($envContent -notmatch "APP_SECRET=.+" -or ($envContent -match "APP_SECRET=(.
     Write-Host "Generated APP_SECRET in backend\.env" -ForegroundColor Yellow
 }
 
-Write-Step "Running database migration"
-$sqlPath = Join-Path $Root "backend\drizzle\0000_init.sql"
-Get-Content $sqlPath -Raw | docker compose exec -T postgres psql -U dexaudio -d dexaudio -q
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "Migration may have partially applied (safe to re-run CREATE IF NOT EXISTS)." -ForegroundColor Yellow
+Write-Step "Running database migrations"
+Get-ChildItem (Join-Path $Root "backend\drizzle\*.sql") | Sort-Object Name | ForEach-Object {
+    Write-Host "  Applying $($_.Name)" -ForegroundColor DarkGray
+    Get-Content $_.FullName -Raw | docker compose exec -T postgres psql -U dexaudio -d dexaudio -q
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "Migration $($_.Name) may have partially applied (safe to re-run)." -ForegroundColor Yellow
+    }
 }
 
 Write-Step "Building shared-types"
