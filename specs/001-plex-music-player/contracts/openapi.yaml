@@ -451,6 +451,16 @@ components:
         matchStatus:
           enum: [matched, partial, not_on_plex]
         plexAlbumId: { type: string, nullable: true }
+        matchCandidates:
+          type: array
+          description: Present when matchStatus is partial (FR-039)
+          items:
+            type: object
+            required: [id, title, artist]
+            properties:
+              id: { type: string, description: Plex album ratingKey }
+              title: { type: string }
+              artist: { type: string }
 
     ScrobbleInput:
       type: object

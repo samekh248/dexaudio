@@ -45,7 +45,7 @@ Monorepo per [plan.md](./plan.md): `packages/shared-types/`, `backend/src/`, `fr
 **⚠️ CRITICAL**: No user story work until this phase is complete
 
 - [x] T009 Define Drizzle schema for `plex_connections`, `discogs_accounts`, `discogs_releases`, `collection_matches`, `lastfm_accounts`, `scrobble_outbox`, `app_settings` in `backend/src/db/schema.ts` per [data-model.md](./data-model.md)
-- [x] T010 Add initial migration and `npm run db:migrate` script in `backend/package.json` using `drizzle-kit`
+- [x] T010 Add Drizzle migrations in `backend/drizzle/` (`0000_init.sql`, `0001_match_candidates.sql`, …) and `npm run db:migrate` in `backend/package.json`; fresh installs include `match_candidates` on `collection_matches`
 - [x] T011 Implement AES-256-GCM credential encryption in `backend/src/lib/crypto.ts` using `APP_SECRET`
 - [x] T012 [P] Implement Fastify app bootstrap, global error handler, and Zod validation plugin in `backend/src/app.ts`
 - [x] T013 [P] Register versioned REST prefix `/api/v1` route tree in `backend/src/api/routes/index.ts`
@@ -58,7 +58,7 @@ Monorepo per [plan.md](./plan.md): `packages/shared-types/`, `backend/src/`, `fr
 - [x] T020 [P] Configure theme CSS variables (Light/Dark/Sync) in `frontend/src/styles/themes.css` and wire to `document.documentElement`
 - [x] T021 [P] Configure `vite-plugin-pwa` and service worker in `frontend/vite.config.ts` per [research.md](./research.md) §12
 - [x] T022 [P] Configure Vitest + 80% coverage thresholds in `frontend/vitest.config.ts` and `backend/vitest.config.ts`
-- [x] T023 [P] Add CI workflow `.github/workflows/test.yml` running `npm run test:coverage` for both workspaces with 80% gate
+- [x] T023 [P] Add CI workflow `.github/workflows/test.yml` running `npm run test:coverage` for both workspaces with 80% gate; apply all `backend/drizzle/*.sql` migrations before backend tests
 
 **Checkpoint**: Foundation ready — user story implementation can begin
 
@@ -218,6 +218,16 @@ Monorepo per [plan.md](./plan.md): `packages/shared-types/`, `backend/src/`, `fr
 
 ---
 
+## Phase 9: Plan & CI sync (post–`/speckit-plan` 2026-05-18)
+
+**Purpose**: Align migrations, CI, and design docs after plan re-validation
+
+- [x] T100 Update CI to apply all `backend/drizzle/*.sql` in order in `.github/workflows/test.yml`
+- [x] T101 [P] Ensure `match_candidates` column and unique index exist in `backend/drizzle/0000_init.sql` for fresh installs
+- [x] T102 [P] Re-validate `plan.md`, `research.md` (§14 migrations), `data-model.md` (`match_candidates`, FR-088 dedup), and `contracts/openapi.yaml` (`matchCandidates`)
+
+---
+
 ## Dependencies & Execution Order
 
 ### Phase Dependencies
@@ -229,6 +239,7 @@ Monorepo per [plan.md](./plan.md): `packages/shared-types/`, `backend/src/`, `fr
 - **User Story 3 (Phase 5)**: Depends on Phase 2 + Plex library from US1 for matching; Discogs credentials UI can ship with US3 if US4 not done (minimal inline form acceptable for story test)
 - **User Story 4 (Phase 6)**: Depends on Phase 2; integrates with US1–US3 services (Last.fm, Discogs, Storage, Appearance)
 - **Polish (Phase 7)**: Depends on desired user stories being complete
+- **Plan & CI sync (Phase 9)**: Depends on Phase 2 schema; can run anytime after T010/T023 exist
 
 ### User Story Dependencies
 
@@ -312,4 +323,5 @@ frontend/src/pages/NowPlayingPage.tsx
 - Plex token and third-party secrets stay server-side (`plex_connections`, encrypted); browser uses `localStorage` for non-secret prefs only
 - GraphQL is optional (T089–T090); REST remains canonical per constitution
 - Custom theme (FR-095) has no contrast enforcement; default themes must meet WCAG AA (T092)
-- Task IDs T001–T094 are sequential in execution order
+- Task IDs T001–T102 are sequential in execution order
+- **Regenerated** via `/speckit-tasks` on 2026-05-18: 102 tasks total, all complete; ready for `/speckit-implement` maintenance or new feature specs

@@ -1,6 +1,6 @@
 # Implementation Plan: Plex Music Player with Discogs Collection Sync
 
-**Branch**: `001-plex-music-player` | **Date**: 2026-05-17 | **Spec**: [spec.md](./spec.md)
+**Branch**: `001-plex-music-player` | **Date**: 2026-05-18 | **Spec**: [spec.md](./spec.md)
 
 **Input**: Feature specification from `/specs/001-plex-music-player/spec.md`
 
@@ -123,11 +123,11 @@ docker-compose.yml          # PostgreSQL for local dev
 
 | Artifact | Path | Status |
 |----------|------|--------|
-| Research | [research.md](./research.md) | ✅ Complete |
-| Data model | [data-model.md](./data-model.md) | ✅ Complete |
-| REST contract | [contracts/openapi.yaml](./contracts/openapi.yaml) | ✅ Complete |
+| Research | [research.md](./research.md) | Complete (re-validated 2026-05-18) |
+| Data model | [data-model.md](./data-model.md) | Complete (re-validated 2026-05-18; match_candidates) |
+| REST contract | [contracts/openapi.yaml](./contracts/openapi.yaml) | Complete (matchCandidates on partial items) |
 | GraphQL (optional) | [contracts/graphql.schema.graphql](./contracts/graphql.schema.graphql) | ✅ Complete |
-| Quickstart | [quickstart.md](./quickstart.md) | ✅ Complete |
+| Quickstart | [quickstart.md](./quickstart.md) | Complete (all drizzle/*.sql migrations) |
 
 ## Implementation Phases (high level — detail in tasks.md)
 

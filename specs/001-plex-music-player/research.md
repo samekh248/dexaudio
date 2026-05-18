@@ -1,6 +1,6 @@
 # Research: Plex Music Player (001-plex-music-player)
 
-**Date**: 2026-05-17  
+**Date**: 2026-05-18 (re-validated)  
 **Plan**: [plan.md](./plan.md) | **Spec**: [spec.md](./spec.md)
 
 All items from Technical Context were resolved; no `NEEDS CLARIFICATION` remains.
@@ -160,3 +160,15 @@ All items from Technical Context were resolved; no `NEEDS CLARIFICATION` remains
 
 **Alternatives considered**:
 - Hashing only — insufficient for reversible API tokens
+
+---
+
+## 14. Database migrations (CI and local)
+
+**Decision**: Numbered SQL files in `backend/drizzle/` (`0000_init.sql`, `0001_match_candidates.sql`, …) applied **in lexicographic order**; `0000_init.sql` includes columns/indexes also added in later migrations so fresh installs are complete; CI applies all `*.sql` files (not only `0000_init`).
+
+**Rationale**: Partial-match feature added `match_candidates` on `collection_matches`; integration tests query that column — partial migration caused HTTP 500 in CI.
+
+**Alternatives considered**:
+- Single monolithic migration only — harder to evolve schema incrementally
+- `drizzle-kit migrate` only in CI — requires extra Node step; raw SQL loop matches docker-compose quickstart
