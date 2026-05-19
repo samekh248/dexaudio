@@ -25,9 +25,9 @@ description: "Task list for feature 003 — Albums Library View"
 
 **Purpose**: Pre-flight checks before any implementation lands. The existing monorepo (`backend/`, `frontend/`, `packages/shared-types/`) already provides toolchain, linting, and test runner, so this phase is intentionally light.
 
-- [ ] T001 Verify the working tree is clean and create / check out branch `003-albums-library-view` (already exists per plan)
-- [ ] T002 [P] Confirm `backend` Vitest config and `frontend` Vitest config both run green from `main` before any new code is added (`cd backend && npm test`; `cd frontend && npm test`)
-- [ ] T003 [P] Confirm `npm run typecheck` (or `tsc --noEmit`) is green in `backend/`, `frontend/`, and `packages/shared-types/` so we have a clean starting baseline
+- [x] T001 Verify the working tree is clean and create / check out branch `003-albums-library-view` (already exists per plan)
+- [x] T002 [P] Confirm `backend` Vitest config and `frontend` Vitest config both run green from `main` before any new code is added (`cd backend && npm test`; `cd frontend && npm test`)
+- [x] T003 [P] Confirm `npm run typecheck` (or `tsc --noEmit`) is green in `backend/`, `frontend/`, and `packages/shared-types/` so we have a clean starting baseline
 
 ---
 
@@ -37,16 +37,16 @@ description: "Task list for feature 003 — Albums Library View"
 
 **⚠️ CRITICAL**: All five user stories consume the enriched `Album` shape (addedAt/userRating) and/or the new shared schemas. US1 additionally requires the `artist_spotlight_state` table.
 
-- [ ] T004 Create Drizzle migration `backend/drizzle/0009_add_artist_spotlight_state.sql` that creates `artist_spotlight_state(artist_id text PK, last_spotlighted_at timestamptz NOT NULL)` and `idx_artist_spotlight_state_last_shown` per `data-model.md`
-- [ ] T005 Add `artistSpotlightState` table definition to `backend/src/db/schema.ts` (Drizzle `pgTable` with `artistId` PK and `lastSpotlightedAt` timestamptz NOT NULL) and export it from the schema barrel
-- [ ] T006 [P] Extend `Album` Zod schema in `packages/shared-types/src/api/schemas.ts` with optional `userRating` (int 0–10) and `addedAt` (ISO date-time string); keep all existing fields backward compatible
-- [ ] T007 [P] Add `ArtistSpotlightSchema` (`artistId`, `artistName`, `albumCount` ≥3, `albumArtUrls` ≤3) to `packages/shared-types/src/api/schemas.ts` and export the inferred `ArtistSpotlight` type
-- [ ] T008 [P] Add `AlbumGroupsResponseSchema` (`recentlyPlayed`, `recentlyAdded`, `hiddenGems`, `randomPicks` arrays of `Album` max 5; `artistSpotlights` array of `ArtistSpotlight` max 5) to `packages/shared-types/src/api/schemas.ts` and export `AlbumGroupsResponse`
-- [ ] T009 [P] Add `AlbumListItemSchema` (`id`, `title`, `artist`, optional `artUrl`, `sortKey`) and an `AllAlbumsResponseSchema` (`items: AlbumListItem[]`, `total: number`) to `packages/shared-types/src/api/schemas.ts`; export inferred types
-- [ ] T010 Re-export the new schemas/types from `packages/shared-types/src/index.ts` so both `backend/` and `frontend/` can import them
-- [ ] T011 Extend `parseAlbumFromMetadata` in `backend/src/services/plex/plex-client.ts` to also capture `addedAt` (Plex `Directory@addedAt`, unix seconds → `Date`), `userRating` (`Directory@userRating`, 0–10), and `lastViewedAt` (`Directory@lastViewedAt`, unix seconds → `Date`). Surface these on an internal `AlbumWithStats` shape and on the public `Album` (only `addedAt`/`userRating`); do NOT leak `lastPlayedAt` to clients.
-- [ ] T012 [P] Add `sortKeyForTitle(title: string): string` helper to a new file `frontend/src/lib/album-sort.ts` per `research.md` §3 — strips a leading `"The "` (case-insensitive, requires trailing space + non-space char) and returns `toLocaleLowerCase()` of the remainder
-- [ ] T013 [P] Add the equivalent server-side `sortKeyForTitle` helper to a new file `backend/src/services/plex/album-sort.ts` (same logic; kept duplicated for tier independence per Principle V — no shared-types runtime helpers)
+- [x] T004 Create Drizzle migration `backend/drizzle/0009_add_artist_spotlight_state.sql` that creates `artist_spotlight_state(artist_id text PK, last_spotlighted_at timestamptz NOT NULL)` and `idx_artist_spotlight_state_last_shown` per `data-model.md`
+- [x] T005 Add `artistSpotlightState` table definition to `backend/src/db/schema.ts` (Drizzle `pgTable` with `artistId` PK and `lastSpotlightedAt` timestamptz NOT NULL) and export it from the schema barrel
+- [x] T006 [P] Extend `Album` Zod schema in `packages/shared-types/src/api/schemas.ts` with optional `userRating` (int 0–10) and `addedAt` (ISO date-time string); keep all existing fields backward compatible
+- [x] T007 [P] Add `ArtistSpotlightSchema` (`artistId`, `artistName`, `albumCount` ≥3, `albumArtUrls` ≤3) to `packages/shared-types/src/api/schemas.ts` and export the inferred `ArtistSpotlight` type
+- [x] T008 [P] Add `AlbumGroupsResponseSchema` (`recentlyPlayed`, `recentlyAdded`, `hiddenGems`, `randomPicks` arrays of `Album` max 5; `artistSpotlights` array of `ArtistSpotlight` max 5) to `packages/shared-types/src/api/schemas.ts` and export `AlbumGroupsResponse`
+- [x] T009 [P] Add `AlbumListItemSchema` (`id`, `title`, `artist`, optional `artUrl`, `sortKey`) and an `AllAlbumsResponseSchema` (`items: AlbumListItem[]`, `total: number`) to `packages/shared-types/src/api/schemas.ts`; export inferred types
+- [x] T010 Re-export the new schemas/types from `packages/shared-types/src/index.ts` so both `backend/` and `frontend/` can import them
+- [x] T011 Extend `parseAlbumFromMetadata` in `backend/src/services/plex/plex-client.ts` to also capture `addedAt` (Plex `Directory@addedAt`, unix seconds → `Date`), `userRating` (`Directory@userRating`, 0–10), and `lastViewedAt` (`Directory@lastViewedAt`, unix seconds → `Date`). Surface these on an internal `AlbumWithStats` shape and on the public `Album` (only `addedAt`/`userRating`); do NOT leak `lastPlayedAt` to clients.
+- [x] T012 [P] Add `sortKeyForTitle(title: string): string` helper to a new file `frontend/src/lib/album-sort.ts` per `research.md` §3 — strips a leading `"The "` (case-insensitive, requires trailing space + non-space char) and returns `toLocaleLowerCase()` of the remainder
+- [x] T013 [P] Add the equivalent server-side `sortKeyForTitle` helper to a new file `backend/src/services/plex/album-sort.ts` (same logic; kept duplicated for tier independence per Principle V — no shared-types runtime helpers)
 
 **Checkpoint**: Foundation complete — every user story can now proceed.
 
@@ -60,31 +60,31 @@ description: "Task list for feature 003 — Albums Library View"
 
 ### Tests for User Story 1
 
-- [ ] T014 [P] [US1] Unit tests for group selection rules in `backend/tests/unit/album-groups-service.test.ts` — covers: Recently Played top-5 by 30-day play count (tie-break by recency); Recently Added top-5 by `addedAt` desc; Hidden Gems filter (`userRating>=6` AND `lastPlayedAt < now-90d` OR null), sort by rating desc + lastPlayedAt asc; Random Picks 5 uniform distinct samples; Artist Spotlights eligibility `albumCount > 2` and exactly-2 exclusion; empty-group emits `[]` (FR-003)
-- [ ] T015 [P] [US1] Unit tests for round-robin in `backend/tests/unit/artist-spotlight-repo.test.ts` — NULLS FIRST ordering, tie-break by `artist_id` ASC, upsert updates `last_spotlighted_at`, stale row remains harmless when artist no longer eligible
-- [ ] T016 [P] [US1] Integration test in `backend/tests/integration/library-albums-groups.test.ts` — mocks Plex client, exercises `GET /api/v1/library/albums/groups?libraryId=…`, asserts JSON shape matches `AlbumGroupsResponseSchema`, asserts 404 when no Plex connection
-- [ ] T017 [P] [US1] Component test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — group with 0 items renders nothing (FR-003); group with 1–5 items renders that many cards; group with >5 items renders only the first 5; heading uses correct semantic level (FR-034)
-- [ ] T018 [P] [US1] Component test in `frontend/tests/unit/AlbumsHomePage.test.tsx` — given a mocked TanStack Query response, renders groups in the FR-002 order; hides empty groups; renders the `BrowseAllTile` inside Random Picks
+- [x] T014 [P] [US1] Unit tests for group selection rules in `backend/tests/unit/album-groups-service.test.ts` — covers: Recently Played top-5 by 30-day play count (tie-break by recency); Recently Added top-5 by `addedAt` desc; Hidden Gems filter (`userRating>=6` AND `lastPlayedAt < now-90d` OR null), sort by rating desc + lastPlayedAt asc; Random Picks 5 uniform distinct samples; Artist Spotlights eligibility `albumCount > 2` and exactly-2 exclusion; empty-group emits `[]` (FR-003)
+- [x] T015 [P] [US1] Unit tests for round-robin in `backend/tests/unit/artist-spotlight-repo.test.ts` — NULLS FIRST ordering, tie-break by `artist_id` ASC, upsert updates `last_spotlighted_at`, stale row remains harmless when artist no longer eligible
+- [x] T016 [P] [US1] Integration test in `backend/tests/integration/library-albums-groups.test.ts` — mocks Plex client, exercises `GET /api/v1/library/albums/groups?libraryId=…`, asserts JSON shape matches `AlbumGroupsResponseSchema`, asserts 404 when no Plex connection
+- [x] T017 [P] [US1] Component test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — group with 0 items renders nothing (FR-003); group with 1–5 items renders that many cards; group with >5 items renders only the first 5; heading uses correct semantic level (FR-034)
+- [x] T018 [P] [US1] Component test in `frontend/tests/unit/AlbumsHomePage.test.tsx` — given a mocked TanStack Query response, renders groups in the FR-002 order; hides empty groups; renders the `BrowseAllTile` inside Random Picks
 
 ### Implementation for User Story 1
 
 #### Backend
 
-- [ ] T019 [US1] Create `backend/src/services/plex/artist-spotlight-repo.ts` exposing `selectLeastRecentlyShown(eligibleArtistIds: string[], limit: number)` and `markShown(artistIds: string[], at: Date)` using Drizzle and the new `artistSpotlightState` table; query uses `ORDER BY last_spotlighted_at ASC NULLS FIRST, artist_id ASC` (research.md §5); upsert with `ON CONFLICT (artist_id) DO UPDATE`
-- [ ] T020 [US1] Create `backend/src/services/plex/album-groups-service.ts` exposing `getAlbumGroups(libraryId: string)` that: (a) loads all albums via existing `library-service` (with the enriched `AlbumWithStats` from T011), (b) loads 30-day track scrobble counts and aggregates by `parentRatingKey`, (c) builds the five arrays per `research.md` §2 / §4, (d) calls `artist-spotlight-repo` to pick + mark eligible artists, (e) fetches up to 3 cover URLs per chosen artist, (f) returns `AlbumGroupsResponse`. Random Picks reseeded per call (FR-028).
-- [ ] T021 [US1] Extend `backend/src/services/plex/library-service.ts` to expose the enriched album list (preserving the existing 60 s in-memory `albumCache`) and a helper for the 30-day per-album play-count aggregation described in `data-model.md` (Plex `/library/sections/{id}/all?type=10&viewedAt>{now-30d}` or fallback to history endpoint)
-- [ ] T022 [US1] Register the new route `GET /api/v1/library/albums/groups` in `backend/src/api/routes/library.ts` — validates `libraryId` query param with Zod, calls `getAlbumGroups`, responds with `AlbumGroupsResponse`; 404 on missing Plex connection
+- [x] T019 [US1] Create `backend/src/services/plex/artist-spotlight-repo.ts` exposing `selectLeastRecentlyShown(eligibleArtistIds: string[], limit: number)` and `markShown(artistIds: string[], at: Date)` using Drizzle and the new `artistSpotlightState` table; query uses `ORDER BY last_spotlighted_at ASC NULLS FIRST, artist_id ASC` (research.md §5); upsert with `ON CONFLICT (artist_id) DO UPDATE`
+- [x] T020 [US1] Create `backend/src/services/plex/album-groups-service.ts` exposing `getAlbumGroups(libraryId: string)` that: (a) loads all albums via existing `library-service` (with the enriched `AlbumWithStats` from T011), (b) loads 30-day track scrobble counts and aggregates by `parentRatingKey`, (c) builds the five arrays per `research.md` §2 / §4, (d) calls `artist-spotlight-repo` to pick + mark eligible artists, (e) fetches up to 3 cover URLs per chosen artist, (f) returns `AlbumGroupsResponse`. Random Picks reseeded per call (FR-028).
+- [x] T021 [US1] Extend `backend/src/services/plex/library-service.ts` to expose the enriched album list (preserving the existing 60 s in-memory `albumCache`) and a helper for the 30-day per-album play-count aggregation described in `data-model.md` (Plex `/library/sections/{id}/all?type=10&viewedAt>{now-30d}` or fallback to history endpoint)
+- [x] T022 [US1] Register the new route `GET /api/v1/library/albums/groups` in `backend/src/api/routes/library.ts` — validates `libraryId` query param with Zod, calls `getAlbumGroups`, responds with `AlbumGroupsResponse`; 404 on missing Plex connection
 
 #### Frontend
 
-- [ ] T023 [P] [US1] Create `frontend/src/components/albums/PlayAlbumOverlay.tsx` — a focusable `Button` (shadcn/ui) absolutely positioned over the cover with translucent background; receives `onActivate` and `albumTitle` props; exposes accessible name `Play <albumTitle>` (FR-015 / FR-018); fades in on `:hover` and `:focus-within` of the parent card via Tailwind classes
-- [ ] T024 [P] [US1] Create `frontend/src/components/albums/AlbumCard.tsx` — a shadcn/ui `Card` + `AspectRatio` composite that renders the cover image (with `loading="lazy"` per FR-032), the `PlayAlbumOverlay`, and a separately focusable details `Link` wrapping the title/artist text (FR-013 / FR-014 / FR-017). NOTE: in US1 the play button is a stub that does nothing (or fires a placeholder callback); the live wiring is added in US2. The details link is functional in US1.
-- [ ] T025 [P] [US1] Create `frontend/src/components/albums/ArtistSpotlightTile.tsx` — a focusable container rendering up to 3 covers in stacked CSS (rotation/offset per `research.md` §8), the artist name, a play affordance (stub in US1, wired in US4), and a separately focusable details link to `/artists/:artistId` (FR-012 / FR-022)
-- [ ] T026 [P] [US1] Create `frontend/src/components/albums/BrowseAllTile.tsx` — a larger shadcn/ui `Card` that links to `/albums/all` (route added by US5); render a "Browse All Albums" label and a generic icon; sized to span the slot of an album card + extra (FR-010). Until US5 lands the tile is still rendered but the route is a placeholder.
-- [ ] T027 [P] [US1] Create `frontend/src/components/albums/AlbumGroupRow.tsx` — accepts `{ title: string; entries: ReactNode[] }`; returns `null` when `entries.length === 0` (FR-003); renders an `<h2>` heading (FR-034) and a horizontally scrollable flex/grid row; group keyboard-navigation per FR-033
-- [ ] T028 [US1] Add `getAlbumGroups(libraryId)` to `frontend/src/services/api-client.ts` and a `useAlbumGroups(libraryId)` TanStack Query hook (60 s `staleTime`, refetch on window focus disabled) in a new file `frontend/src/hooks/use-album-groups.ts`
-- [ ] T029 [US1] Create `frontend/src/pages/AlbumsHomePage.tsx` — fetches groups via `useAlbumGroups`, renders shadcn `Skeleton` rows during initial load, then renders the five `AlbumGroupRow`s in FR-002 order using `AlbumCard` / `ArtistSpotlightTile` / `BrowseAllTile`; empty groups hidden by `AlbumGroupRow` (FR-003)
-- [ ] T030 [US1] Update `frontend/src/App.tsx` — root `/` route now renders `AlbumsHomePage` (was `AlbumGridPage`); leave `/albums/:id` and other existing detail routes unchanged; do NOT delete `AlbumGridPage.tsx` yet (cleanup happens in Polish phase once US5 lands)
+- [x] T023 [P] [US1] Create `frontend/src/components/albums/PlayAlbumOverlay.tsx` — a focusable `Button` (shadcn/ui) absolutely positioned over the cover with translucent background; receives `onActivate` and `albumTitle` props; exposes accessible name `Play <albumTitle>` (FR-015 / FR-018); fades in on `:hover` and `:focus-within` of the parent card via Tailwind classes
+- [x] T024 [P] [US1] Create `frontend/src/components/albums/AlbumCard.tsx` — a shadcn/ui `Card` + `AspectRatio` composite that renders the cover image (with `loading="lazy"` per FR-032), the `PlayAlbumOverlay`, and a separately focusable details `Link` wrapping the title/artist text (FR-013 / FR-014 / FR-017). NOTE: in US1 the play button is a stub that does nothing (or fires a placeholder callback); the live wiring is added in US2. The details link is functional in US1.
+- [x] T025 [P] [US1] Create `frontend/src/components/albums/ArtistSpotlightTile.tsx` — a focusable container rendering up to 3 covers in stacked CSS (rotation/offset per `research.md` §8), the artist name, a play affordance (stub in US1, wired in US4), and a separately focusable details link to `/artists/:artistId` (FR-012 / FR-022)
+- [x] T026 [P] [US1] Create `frontend/src/components/albums/BrowseAllTile.tsx` — a larger shadcn/ui `Card` that links to `/albums/all` (route added by US5); render a "Browse All Albums" label and a generic icon; sized to span the slot of an album card + extra (FR-010). Until US5 lands the tile is still rendered but the route is a placeholder.
+- [x] T027 [P] [US1] Create `frontend/src/components/albums/AlbumGroupRow.tsx` — accepts `{ title: string; entries: ReactNode[] }`; returns `null` when `entries.length === 0` (FR-003); renders an `<h2>` heading (FR-034) and a horizontally scrollable flex/grid row; group keyboard-navigation per FR-033
+- [x] T028 [US1] Add `getAlbumGroups(libraryId)` to `frontend/src/services/api-client.ts` and a `useAlbumGroups(libraryId)` TanStack Query hook (60 s `staleTime`, refetch on window focus disabled) in a new file `frontend/src/hooks/use-album-groups.ts`
+- [x] T029 [US1] Create `frontend/src/pages/AlbumsHomePage.tsx` — fetches groups via `useAlbumGroups`, renders shadcn `Skeleton` rows during initial load, then renders the five `AlbumGroupRow`s in FR-002 order using `AlbumCard` / `ArtistSpotlightTile` / `BrowseAllTile`; empty groups hidden by `AlbumGroupRow` (FR-003)
+- [x] T030 [US1] Update `frontend/src/App.tsx` — root `/` route now renders `AlbumsHomePage` (was `AlbumGridPage`); leave `/albums/:id` and other existing detail routes unchanged; do NOT delete `AlbumGridPage.tsx` yet (cleanup happens in Polish phase once US5 lands)
 
 **Checkpoint**: User Story 1 is independently testable — `/api/v1/library/albums/groups` returns curated groups and `/` renders them with stub play buttons and working details links.
 
@@ -98,13 +98,13 @@ description: "Task list for feature 003 — Albums Library View"
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Unit test in `frontend/tests/unit/use-play-album.test.tsx` — hook fetches tracks, calls `playNow` BEFORE `navigate("/now-playing")` (FR-016a); calling with the currently-playing album rebuilds the queue and resets position (FR-016c)
-- [ ] T032 [P] [US2] Component test in `frontend/tests/unit/AlbumCard.test.tsx` — clicking the play overlay invokes the `usePlayAlbum` hook (mocked); clicking the cover-body / title / artist navigates to `/albums/:id` and does NOT play (FR-017); touch tap on play button triggers play (FR-019)
+- [x] T031 [P] [US2] Unit test in `frontend/tests/unit/use-play-album.test.tsx` — hook fetches tracks, calls `playNow` BEFORE `navigate("/now-playing")` (FR-016a); calling with the currently-playing album rebuilds the queue and resets position (FR-016c)
+- [x] T032 [P] [US2] Component test in `frontend/tests/unit/AlbumCard.test.tsx` — clicking the play overlay invokes the `usePlayAlbum` hook (mocked); clicking the cover-body / title / artist navigates to `/albums/:id` and does NOT play (FR-017); touch tap on play button triggers play (FR-019)
 
 ### Implementation for User Story 2
 
-- [ ] T033 [US2] Create `frontend/src/hooks/use-play-album.ts` exporting `usePlayAlbum()` per `research.md` §7 — returns an async callback `(albumId: string) => Promise<void>` that calls `api.getAlbumTracks(albumId)`, then `playbackQueueStore.playNow(tracks)`, then `navigate("/now-playing")` in that order
-- [ ] T034 [US2] Wire `AlbumCard` (created in T024) to invoke `usePlayAlbum` from its `PlayAlbumOverlay.onActivate`; ensure the play button uses `e.stopPropagation()` so the details link is not also triggered; verify keyboard activation (Enter / Space) works via the underlying shadcn `Button`
+- [x] T033 [US2] Create `frontend/src/hooks/use-play-album.ts` exporting `usePlayAlbum()` per `research.md` §7 — returns an async callback `(albumId: string) => Promise<void>` that calls `api.getAlbumTracks(albumId)`, then `playbackQueueStore.playNow(tracks)`, then `navigate("/now-playing")` in that order
+- [x] T034 [US2] Wire `AlbumCard` (created in T024) to invoke `usePlayAlbum` from its `PlayAlbumOverlay.onActivate`; ensure the play button uses `e.stopPropagation()` so the details link is not also triggered; verify keyboard activation (Enter / Space) works via the underlying shadcn `Button`
 
 **Checkpoint**: Hover-to-play works end-to-end across every card on `AlbumsHomePage`. US3 details navigation continues to work because the click handlers are kept separate.
 
@@ -118,13 +118,13 @@ description: "Task list for feature 003 — Albums Library View"
 
 ### Tests for User Story 3
 
-- [ ] T035 [P] [US3] Extend `frontend/tests/unit/AlbumCard.test.tsx` (from T032) with keyboard-tab-order assertions per FR-018: 2 focusable elements per card, in (play, details) order, each with the documented accessible names
-- [ ] T036 [P] [US3] Add accessibility test using `jest-axe` against a rendered `AlbumsHomePage` snapshot in `frontend/tests/unit/AlbumsHomePage.a11y.test.tsx` — no axe violations on default render (SC-006)
+- [x] T035 [P] [US3] Extend `frontend/tests/unit/AlbumCard.test.tsx` (from T032) with keyboard-tab-order assertions per FR-018: 2 focusable elements per card, in (play, details) order, each with the documented accessible names
+- [x] T036 [P] [US3] Add accessibility test using `jest-axe` against a rendered `AlbumsHomePage` snapshot in `frontend/tests/unit/AlbumsHomePage.a11y.test.tsx` — no axe violations on default render (SC-006)
 
 ### Implementation for User Story 3
 
-- [ ] T037 [US3] Confirm/finalize `AlbumCard` accessibility from T024: two focusable children, descriptive `aria-label`s (`Play <title>`, `Open details for <title>`), visible focus indicator from shadcn defaults (FR-018 / FR-033)
-- [ ] T038 [US3] Ensure scroll-position restoration in `frontend/src/App.tsx` — if the existing `<BrowserRouter>` doesn't auto-restore scroll, mount a `ScrollRestoration` component (React Router v6.4+) or attach a `useScrollRestoration` hook in `AlbumsHomePage` keyed on route; satisfies FR-016b / FR-029
+- [x] T037 [US3] Confirm/finalize `AlbumCard` accessibility from T024: two focusable children, descriptive `aria-label`s (`Play <title>`, `Open details for <title>`), visible focus indicator from shadcn defaults (FR-018 / FR-033)
+- [x] T038 [US3] Ensure scroll-position restoration in `frontend/src/App.tsx` — if the existing `<BrowserRouter>` doesn't auto-restore scroll, mount a `ScrollRestoration` component (React Router v6.4+) or attach a `useScrollRestoration` hook in `AlbumsHomePage` keyed on route; satisfies FR-016b / FR-029
 
 **Checkpoint**: All three P1 stories are functional. This is the MVP — the app delivers value: browse curated groups → play OR open detail → back navigation works.
 
@@ -138,13 +138,13 @@ description: "Task list for feature 003 — Albums Library View"
 
 ### Tests for User Story 4
 
-- [ ] T039 [P] [US4] Unit test in `frontend/tests/unit/use-play-artist.test.tsx` — given a mocked `getArtistAlbums` returning unsorted albums, the resolved queue is sorted by `(releaseYear asc, title asc, id asc)` per FR-021; first track of the earliest album is `currentIndex: 0`
-- [ ] T040 [P] [US4] Component test in `frontend/tests/unit/ArtistSpotlightTile.test.tsx` — play affordance triggers `usePlayArtist`; details affordance navigates to `/artists/:artistId`; tile is keyboard-reachable (FR-022 / FR-033)
+- [x] T039 [P] [US4] Unit test in `frontend/tests/unit/use-play-artist.test.tsx` — given a mocked `getArtistAlbums` returning unsorted albums, the resolved queue is sorted by `(releaseYear asc, title asc, id asc)` per FR-021; first track of the earliest album is `currentIndex: 0`
+- [x] T040 [P] [US4] Component test in `frontend/tests/unit/ArtistSpotlightTile.test.tsx` — play affordance triggers `usePlayArtist`; details affordance navigates to `/artists/:artistId`; tile is keyboard-reachable (FR-022 / FR-033)
 
 ### Implementation for User Story 4
 
-- [ ] T041 [US4] Create `frontend/src/hooks/use-play-artist.ts` exporting `usePlayArtist()` — async callback `(artistId: string) => Promise<void>` that fetches the artist's albums (existing `api.getArtistAlbums` if available, else add one), sorts oldest-to-newest with `(year asc, title asc, id asc)` tie-breakers, fetches tracks for each album in order, concatenates them, calls `playbackQueueStore.playNow(allTracks)`, then `navigate("/now-playing")` (FR-020 / FR-021)
-- [ ] T042 [US4] Wire `ArtistSpotlightTile` (created in T025) to invoke `usePlayArtist` from its play affordance and `Link` to `/artists/:artistId` from its details affordance; ensure click-event isolation between the two affordances
+- [x] T041 [US4] Create `frontend/src/hooks/use-play-artist.ts` exporting `usePlayArtist()` — async callback `(artistId: string) => Promise<void>` that fetches the artist's albums (existing `api.getArtistAlbums` if available, else add one), sorts oldest-to-newest with `(year asc, title asc, id asc)` tie-breakers, fetches tracks for each album in order, concatenates them, calls `playbackQueueStore.playNow(allTracks)`, then `navigate("/now-playing")` (FR-020 / FR-021)
+- [x] T042 [US4] Wire `ArtistSpotlightTile` (created in T025) to invoke `usePlayArtist` from its play affordance and `Link` to `/artists/:artistId` from its details affordance; ensure click-event isolation between the two affordances
 
 **Checkpoint**: Artist Spotlights are fully interactive. All Story 1–4 functionality is now live.
 
@@ -158,23 +158,23 @@ description: "Task list for feature 003 — Albums Library View"
 
 ### Tests for User Story 5
 
-- [ ] T043 [P] [US5] Unit tests in `backend/tests/unit/album-sort-the-article.test.ts` against a fixture of ≥20 representative titles (SC-007), exercising: literal "The " prefix, "A "/"An " not stripped, all-caps "THE", "The" with no trailing word, leading numerals (FR-026), punctuation-only titles
-- [ ] T044 [P] [US5] Unit tests in `frontend/tests/unit/album-sort-the-article.test.ts` using the SAME ≥20-title fixture (copy as JSON or inline) to assert tier parity between `frontend/src/lib/album-sort.ts` and `backend/src/services/plex/album-sort.ts`
-- [ ] T045 [P] [US5] Integration test in `backend/tests/integration/library-albums-all.test.ts` — `GET /api/v1/library/albums/all?libraryId=…` returns items sorted by `sortKey`; `Cache-Control` header is `private, max-age=60, stale-while-revalidate=600`; 404 when no Plex connection
-- [ ] T046 [P] [US5] Component test in `frontend/tests/unit/BrowseAllAlbumsPage.test.tsx` — given a mocked response of 50 albums with mixed "The" prefixes, items render in the expected order; `content-visibility: auto` style is applied to off-screen row containers
+- [x] T043 [P] [US5] Unit tests in `backend/tests/unit/album-sort-the-article.test.ts` against a fixture of ≥20 representative titles (SC-007), exercising: literal "The " prefix, "A "/"An " not stripped, all-caps "THE", "The" with no trailing word, leading numerals (FR-026), punctuation-only titles
+- [x] T044 [P] [US5] Unit tests in `frontend/tests/unit/album-sort-the-article.test.ts` using the SAME ≥20-title fixture (copy as JSON or inline) to assert tier parity between `frontend/src/lib/album-sort.ts` and `backend/src/services/plex/album-sort.ts`
+- [x] T045 [P] [US5] Integration test in `backend/tests/integration/library-albums-all.test.ts` — `GET /api/v1/library/albums/all?libraryId=…` returns items sorted by `sortKey`; `Cache-Control` header is `private, max-age=60, stale-while-revalidate=600`; 404 when no Plex connection
+- [x] T046 [P] [US5] Component test in `frontend/tests/unit/BrowseAllAlbumsPage.test.tsx` — given a mocked response of 50 albums with mixed "The" prefixes, items render in the expected order; `content-visibility: auto` style is applied to off-screen row containers
 
 ### Implementation for User Story 5
 
 #### Backend
 
-- [ ] T047 [US5] Create `backend/src/services/plex/album-list-service.ts` exposing `getAllAlbums(libraryId: string)` that loads the cached full album list, maps each to `AlbumListItem` with `sortKey = sortKeyForTitle(title)`, and returns items sorted via `Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare(a.sortKey, b.sortKey)` (research.md §3) plus a `total` count
-- [ ] T048 [US5] Register `GET /api/v1/library/albums/all` in `backend/src/api/routes/library.ts` — validates `libraryId`, calls `getAllAlbums`, sets `Cache-Control: private, max-age=60, stale-while-revalidate=600`, responds with `AllAlbumsResponse`; 404 on missing Plex connection
+- [x] T047 [US5] Create `backend/src/services/plex/album-list-service.ts` exposing `getAllAlbums(libraryId: string)` that loads the cached full album list, maps each to `AlbumListItem` with `sortKey = sortKeyForTitle(title)`, and returns items sorted via `Intl.Collator(undefined, { numeric: true, sensitivity: "base" }).compare(a.sortKey, b.sortKey)` (research.md §3) plus a `total` count
+- [x] T048 [US5] Register `GET /api/v1/library/albums/all` in `backend/src/api/routes/library.ts` — validates `libraryId`, calls `getAllAlbums`, sets `Cache-Control: private, max-age=60, stale-while-revalidate=600`, responds with `AllAlbumsResponse`; 404 on missing Plex connection
 
 #### Frontend
 
-- [ ] T049 [US5] Add `getAllAlbums(libraryId)` to `frontend/src/services/api-client.ts` and a `useAllAlbums(libraryId)` TanStack Query hook in `frontend/src/hooks/use-all-albums.ts` (long `staleTime`, single fetch sufficient for a session)
-- [ ] T050 [US5] Create `frontend/src/pages/BrowseAllAlbumsPage.tsx` — renders a CSS-grid container; each row uses `style={{ contentVisibility: "auto", containIntrinsicSize: "<row-height>" }}` for virtualization (research.md §6); cover images use `loading="lazy"`; each row links to `/albums/:id` and exposes the same play overlay as `AlbumCard` reusing `PlayAlbumOverlay` + `usePlayAlbum` (FR-016 applies here too)
-- [ ] T051 [US5] Add the `/albums/all` route in `frontend/src/App.tsx` rendering `BrowseAllAlbumsPage`; verify the `BrowseAllTile` link from T026 now resolves correctly
+- [x] T049 [US5] Add `getAllAlbums(libraryId)` to `frontend/src/services/api-client.ts` and a `useAllAlbums(libraryId)` TanStack Query hook in `frontend/src/hooks/use-all-albums.ts` (long `staleTime`, single fetch sufficient for a session)
+- [x] T050 [US5] Create `frontend/src/pages/BrowseAllAlbumsPage.tsx` — renders a CSS-grid container; each row uses `style={{ contentVisibility: "auto", containIntrinsicSize: "<row-height>" }}` for virtualization (research.md §6); cover images use `loading="lazy"`; each row links to `/albums/:id` and exposes the same play overlay as `AlbumCard` reusing `PlayAlbumOverlay` + `usePlayAlbum` (FR-016 applies here too)
+- [x] T051 [US5] Add the `/albums/all` route in `frontend/src/App.tsx` rendering `BrowseAllAlbumsPage`; verify the `BrowseAllTile` link from T026 now resolves correctly
 
 **Checkpoint**: All five user stories are complete and independently demonstrable.
 
@@ -184,14 +184,14 @@ description: "Task list for feature 003 — Albums Library View"
 
 **Purpose**: Cleanup, legacy redirects, defensive integrations, and end-to-end verification against the quickstart.
 
-- [ ] T052 Delete `frontend/src/pages/AlbumGridPage.tsx` and remove any remaining imports/usages (FR-001a); the new `AlbumsHomePage` fully supersedes it
-- [ ] T053 Add a legacy redirect route in `frontend/src/App.tsx` — `<Route path="albums" element={<Navigate to="/" replace />} />` so any bookmarked `/albums` URLs resolve cleanly (FR-001b)
-- [ ] T054 Extend `backend/src/services/plex/data-wipe-service.ts` (from feature 002) to also `TRUNCATE artist_spotlight_state` on Plex server/account switch; document this in the file's header comment (data-model.md §"Entity Relationships")
-- [ ] T055 [P] Verify the service worker `stale-while-revalidate` strategy correctly caches `GET /api/v1/library/albums/groups` and `GET /api/v1/library/albums/all`; if the SW route table is allowlist-based, add the two new paths in `frontend/src/sw/` (or equivalent) per plan §Constitution Check row "offline-first PWA"
-- [ ] T056 [P] Run jest-axe over `AlbumsHomePage` and `BrowseAllAlbumsPage` and resolve any violations; document SC-006 result
-- [ ] T057 [P] Measure SC-003 (FMP < 2 s on ~1,000-album library) and SC-004 (60 fps scroll on 10,000-album library) per `quickstart.md` §6; record results in `specs/003-albums-library-view/quickstart.md` (append a "Verification results" subsection) or attach to the feature PR
-- [ ] T058 Execute the full `quickstart.md` §4 manual verification matrix (Stories 1–5) and check off each item; file follow-up issues for any deviation
-- [ ] T059 Final lint + typecheck sweep across `backend/`, `frontend/`, and `packages/shared-types/`; run `npm test` in both `backend/` and `frontend/` from a clean state and confirm green
+- [x] T052 Delete `frontend/src/pages/AlbumGridPage.tsx` and remove any remaining imports/usages (FR-001a); the new `AlbumsHomePage` fully supersedes it
+- [x] T053 Add a legacy redirect route in `frontend/src/App.tsx` — `<Route path="albums" element={<Navigate to="/" replace />} />` so any bookmarked `/albums` URLs resolve cleanly (FR-001b)
+- [x] T054 Extend `backend/src/services/plex/data-wipe-service.ts` (from feature 002) to also `TRUNCATE artist_spotlight_state` on Plex server/account switch; document this in the file's header comment (data-model.md §"Entity Relationships")
+- [x] T055 [P] Verify the service worker `stale-while-revalidate` strategy correctly caches `GET /api/v1/library/albums/groups` and `GET /api/v1/library/albums/all`; if the SW route table is allowlist-based, add the two new paths in `frontend/src/sw/` (or equivalent) per plan §Constitution Check row "offline-first PWA"
+- [x] T056 [P] Run jest-axe over `AlbumsHomePage` and `BrowseAllAlbumsPage` and resolve any violations; document SC-006 result
+- [x] T057 [P] Measure SC-003 (FMP < 2 s on ~1,000-album library) and SC-004 (60 fps scroll on 10,000-album library) per `quickstart.md` §6; record results in `specs/003-albums-library-view/quickstart.md` (append a "Verification results" subsection) or attach to the feature PR
+- [x] T058 Execute the full `quickstart.md` §4 manual verification matrix (Stories 1–5) and check off each item; file follow-up issues for any deviation
+- [x] T059 Final lint + typecheck sweep across `backend/`, `frontend/`, and `packages/shared-types/`; run `npm test` in both `backend/` and `frontend/` from a clean state and confirm green
 
 ---
 

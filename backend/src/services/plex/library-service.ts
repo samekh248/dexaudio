@@ -1,8 +1,12 @@
 import type { Album, AlbumPage, SearchResults, Track } from "@dexaudio/shared-types";
 import type { PlexConfig } from "./plex-client.js";
 import * as plexClient from "./plex-client.js";
+import { proxyArtUrl } from "./plex-client.js";
+import type { AlbumWithStats } from "./plex-client.js";
 
 const albumCache = new Map<string, { data: AlbumPage; expires: number }>();
+const allAlbumsCache = new Map<string, { data: AlbumWithStats[]; expires: number }>();
+const playCount30dCache = new Map<string, { data: Map<string, number>; expires: number }>();
 const CACHE_TTL_MS = 60_000;
 
 export async function getAlbums(
@@ -16,18 +20,46 @@ export async function getAlbums(
   if (cached && cached.expires > Date.now()) return cached.data;
 
   const { items, total } = await plexClient.fetchAlbums(config, libraryId, page, pageSize);
-  const result: AlbumPage = { items, total, page };
+  const publicItems = items.map((a) => ({ ...plexClient.toPublicAlbum(a) }));
+  const result: AlbumPage = { items: publicItems, total, page };
   albumCache.set(cacheKey, { data: result, expires: Date.now() + CACHE_TTL_MS });
   return result;
 }
 
-export async function getArtistAlbums(_config: PlexConfig, artistId: string): Promise<Album[]> {
-  // Plex artist children are albums
-  return [];
+export async function getAllAlbumsWithStats(
+  config: PlexConfig,
+  libraryId: string,
+): Promise<AlbumWithStats[]> {
+  const cacheKey = libraryId;
+  const cached = allAlbumsCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.data;
+
+  const data = await plexClient.fetchAllAlbums(config, libraryId);
+  allAlbumsCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
+  return data;
+}
+
+export async function getAlbumPlayCounts30d(
+  config: PlexConfig,
+  libraryId: string,
+): Promise<Map<string, number>> {
+  const cacheKey = libraryId;
+  const cached = playCount30dCache.get(cacheKey);
+  if (cached && cached.expires > Date.now()) return cached.data;
+
+  const data = await plexClient.fetchAlbumPlayCounts30d(config, libraryId);
+  playCount30dCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
+  return data;
+}
+
+export async function getArtistAlbums(config: PlexConfig, artistId: string): Promise<Album[]> {
+  const albums = await plexClient.fetchArtistAlbums(config, artistId);
+  return albums.map(plexClient.toPublicAlbum);
 }
 
 export async function getAlbumTracks(config: PlexConfig, albumId: string): Promise<Track[]> {
-  return plexClient.fetchAlbumTracks(config, albumId);
+  const tracks = await plexClient.fetchAlbumTracks(config, albumId);
+  return tracks.map((t) => ({ ...t, artUrl: proxyArtUrl(t.artUrl) }));
 }
 
 export async function searchLibrary(
@@ -41,15 +73,17 @@ export async function searchLibrary(
   const xml = await res.text();
   const albums: Album[] = [];
   const tracks: Track[] = [];
-  const dirRegex = /<Directory([^>]*)\/>/g;
+  const dirRegex = /<Directory\b([^>]*?)\/?>/g;
   let m: RegExpExecArray | null;
   while ((m = dirRegex.exec(xml)) !== null) {
     const attrs = parseAttrs(m[1]);
-    albums.push(plexClient.parseAlbumFromMetadata(attrs));
+    const album = plexClient.parseAlbumFromMetadata(attrs);
+    albums.push({ ...album, artUrl: proxyArtUrl(album.artUrl) });
   }
-  const trackRegex = /<Track([^>]*)\/>/g;
+  const trackRegex = /<Track\b([^>]*?)\/?>/g;
   while ((m = trackRegex.exec(xml)) !== null) {
-    tracks.push(plexClient.parseTrackFromMetadata(parseAttrs(m[1])));
+    const track = plexClient.parseTrackFromMetadata(parseAttrs(m[1]));
+    tracks.push({ ...track, artUrl: proxyArtUrl(track.artUrl) });
   }
   return { albums, tracks };
 }
@@ -64,4 +98,6 @@ function parseAttrs(s: string): Record<string, string> {
 
 export function clearAlbumCache() {
   albumCache.clear();
+  allAlbumsCache.clear();
+  playCount30dCache.clear();
 }

@@ -3,8 +3,26 @@ import type { FastifyInstance } from "fastify";
 import { NotFoundError } from "../../lib/errors.js";
 import * as plexConn from "../../services/plex/plex-connection-service.js";
 import * as libraryService from "../../services/plex/library-service.js";
+import * as albumGroupsService from "../../services/plex/album-groups-service.js";
+import * as albumListService from "../../services/plex/album-list-service.js";
 
 export async function libraryRoutes(app: FastifyInstance) {
+  app.get("/library/albums/groups", async (request) => {
+    const { libraryId } = z.object({ libraryId: z.string() }).parse(request.query);
+    const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
+    if (!config) throw new NotFoundError("Plex not connected");
+    return albumGroupsService.getAlbumGroups(app.db, config, libraryId);
+  });
+
+  app.get("/library/albums/all", async (request, reply) => {
+    const { libraryId } = z.object({ libraryId: z.string() }).parse(request.query);
+    const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
+    if (!config) throw new NotFoundError("Plex not connected");
+    const result = await albumListService.getAllAlbums(config, libraryId);
+    reply.header("Cache-Control", "private, max-age=60, stale-while-revalidate=600");
+    return result;
+  });
+
   app.get("/library/albums", async (request) => {
     const query = z
       .object({

@@ -31,8 +31,42 @@ export const AlbumSchema = z.object({
   artUrl: z.string().optional(),
   playCount: z.number().int().nonnegative().optional(),
   pinned: z.boolean().optional(),
+  userRating: z.number().int().min(0).max(10).optional(),
+  addedAt: z.string().datetime().optional(),
 });
 export type Album = z.infer<typeof AlbumSchema>;
+
+export const ArtistSpotlightSchema = z.object({
+  artistId: z.string(),
+  artistName: z.string(),
+  albumCount: z.number().int().min(3),
+  albumArtUrls: z.array(z.string()).max(3),
+});
+export type ArtistSpotlight = z.infer<typeof ArtistSpotlightSchema>;
+
+export const AlbumGroupsResponseSchema = z.object({
+  recentlyPlayed: z.array(AlbumSchema).max(5),
+  recentlyAdded: z.array(AlbumSchema).max(5),
+  hiddenGems: z.array(AlbumSchema).max(5),
+  randomPicks: z.array(AlbumSchema).max(5),
+  artistSpotlights: z.array(ArtistSpotlightSchema).max(5),
+});
+export type AlbumGroupsResponse = z.infer<typeof AlbumGroupsResponseSchema>;
+
+export const AlbumListItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  artist: z.string(),
+  artUrl: z.string().optional(),
+  sortKey: z.string(),
+});
+export type AlbumListItem = z.infer<typeof AlbumListItemSchema>;
+
+export const AllAlbumsResponseSchema = z.object({
+  items: z.array(AlbumListItemSchema),
+  total: z.number().int().nonnegative(),
+});
+export type AllAlbumsResponse = z.infer<typeof AllAlbumsResponseSchema>;
 
 export const AlbumPageSchema = z.object({
   items: z.array(AlbumSchema),

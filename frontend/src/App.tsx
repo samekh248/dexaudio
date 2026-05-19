@@ -1,7 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
-import { AlbumGridPage } from "@/pages/AlbumGridPage";
+import { AlbumsHomePage } from "@/pages/AlbumsHomePage";
+import { BrowseAllAlbumsPage } from "@/pages/BrowseAllAlbumsPage";
 import { AlbumDetailPage } from "@/pages/AlbumDetailPage";
 import { ArtistAlbumsPage } from "@/pages/ArtistAlbumsPage";
 import { NowPlayingPage } from "@/pages/NowPlayingPage";
@@ -23,7 +24,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppShell />}>
-        <Route index element={<AlbumGridPage />} />
+        <Route index element={<AlbumsHomePage />} />
+        <Route path="albums/all" element={<BrowseAllAlbumsPage />} />
+        <Route path="albums" element={<Navigate to="/" replace />} />
         <Route path="albums/:albumId" element={<AlbumDetailPage />} />
         <Route path="artists/:artistId" element={<ArtistAlbumsPage />} />
         <Route path="now-playing" element={<NowPlayingPage />} />

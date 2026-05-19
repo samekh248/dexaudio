@@ -1,6 +1,8 @@
 import type {
   Album,
+  AlbumGroupsResponse,
   AlbumPage,
+  AllAlbumsResponse,
   AppSettings,
   DiscogsCollectionItem,
   MatchStatus,
@@ -73,6 +75,12 @@ export const api = {
 
   getAlbums: (libraryId: string, page = 1, pageSize = 48) =>
     request<AlbumPage>(`/library/albums?libraryId=${libraryId}&page=${page}&pageSize=${pageSize}`),
+
+  getAlbumGroups: (libraryId: string) =>
+    request<AlbumGroupsResponse>(`/library/albums/groups?libraryId=${encodeURIComponent(libraryId)}`),
+
+  getAllAlbums: (libraryId: string) =>
+    request<AllAlbumsResponse>(`/library/albums/all?libraryId=${encodeURIComponent(libraryId)}`),
 
   getAlbumTracks: (albumId: string) => request<Track[]>(`/library/albums/${albumId}/tracks`),
 
