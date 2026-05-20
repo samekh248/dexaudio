@@ -1,0 +1,171 @@
+openapi: 3.1.0
+info:
+  title: Dex Audio — Targeted Library Queries
+  version: 0.1.0
+  description: |
+    No new routes or response schemas. Documents implementation behavior for existing
+    per-group library endpoints from 006-library-view-refactor.
+
+    Backend change: each endpoint uses targeted Plex queries and caches up to 20 items
+    per profile per library (60s). HTTP `limit` slices the cached set (10 home, 20 view-all).
+
+servers:
+  - url: /api/v1
+
+paths:
+  /library/albums/groups/recently-added:
+    get:
+      operationId: getRecentlyAddedGroup
+      summary: Recently Added (targeted Plex sort addedAt:desc)
+      description: |
+        Implementation fetches 20 newest albums via Plex remote sort; does not load full catalog.
+        `limit` returns a prefix of the cached 20-item set.
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+
+  /library/albums/groups/recently-played:
+    get:
+      operationId: getRecentlyPlayedGroup
+      summary: Recently Played (30d play counts + targeted metadata)
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+
+  /library/albums/groups/hidden-gems:
+    get:
+      operationId: getHiddenGemsGroup
+      summary: Hidden Gems (top-rated candidate pull + local neglect filter)
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+
+  /library/albums/groups/random-picks:
+    get:
+      operationId: getRandomPicksGroup
+      summary: Random Picks (hybrid bounded pool, not full-catalog shuffle)
+      description: |
+        Draws from union of recent-by-added (M₁=300) and alphabetical (M₂=300) slices.
+        Results differ from legacy full-catalog shuffle; vary on cache miss / re-entry.
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Random album list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+
+  /library/albums/groups/artist-spotlights:
+    get:
+      operationId: getArtistSpotlightsGroup
+      summary: Artist spotlights (artist-type Plex query + round-robin)
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Artist spotlight list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistSpotlightGroupResponse"
+
+components:
+  parameters:
+    libraryId:
+      name: libraryId
+      in: query
+      required: true
+      schema:
+        type: string
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+
+  schemas:
+    Album:
+      type: object
+      required: [id, title, artist]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        year:
+          type: integer
+        artUrl:
+          type: string
+        userRating:
+          type: number
+        addedAt:
+          type: string
+          format: date-time
+
+    AlbumGroupResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Album"
+
+    ArtistSpotlight:
+      type: object
+      required: [artistId, artistName, albumCount, albumArtUrls]
+      properties:
+        artistId:
+          type: string
+        artistName:
+          type: string
+        albumCount:
+          type: integer
+        albumArtUrls:
+          type: array
+          items:
+            type: string
+
+    ArtistSpotlightGroupResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistSpotlight"

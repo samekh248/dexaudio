@@ -4,8 +4,7 @@ import type { PlexConfig } from "./plex-client.js";
 import * as plexClient from "./plex-client.js";
 import type { AlbumWithStats } from "./plex-client.js";
 import { proxyArtUrl } from "./plex-client.js";
-import * as spotlightRepo from "./artist-spotlight-repo.js";
-import * as libraryService from "./library-service.js";
+import * as targetedLibrary from "./targeted-library-service.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -107,7 +106,7 @@ function albumReleaseSortKey(album: AlbumWithStats): number {
   return album.year ?? Number.MAX_SAFE_INTEGER;
 }
 
-function buildArtistSpotlightTiles(
+export function buildArtistSpotlightTiles(
   selectedIds: string[],
   eligible: Map<string, { name: string; albums: AlbumWithStats[] }>,
 ): ArtistSpotlight[] {
@@ -131,42 +130,18 @@ function buildArtistSpotlightTiles(
   });
 }
 
-async function loadAlbumsWithPlayCounts(
-  config: PlexConfig,
-  libraryId: string,
-): Promise<AlbumWithStats[]> {
-  const [albums, playCounts30d] = await Promise.all([
-    libraryService.getAllAlbumsWithStats(config, libraryId),
-    libraryService.getAlbumPlayCounts30d(config, libraryId),
-  ]);
-  for (const album of albums) {
-    album.playCount30d = playCounts30d.get(album.id) ?? 0;
-  }
-  return albums;
-}
-
-async function buildArtistSpotlights(
-  db: Db,
-  albums: AlbumWithStats[],
-  limit = HOME_PREVIEW_LIMIT,
-): Promise<ArtistSpotlight[]> {
-  const cap = clampGroupLimit(limit);
-  const eligible = getEligibleArtistIds(albums);
-  const eligibleIds = [...eligible.keys()];
-  const selectedIds = await spotlightRepo.selectLeastRecentlyShown(db, eligibleIds, cap);
-  if (cap <= HOME_PREVIEW_LIMIT) {
-    await spotlightRepo.markShown(db, selectedIds, new Date());
-  }
-  return buildArtistSpotlightTiles(selectedIds, eligible);
-}
-
 export async function getRecentlyPlayed(
   config: PlexConfig,
   libraryId: string,
   limit = HOME_PREVIEW_LIMIT,
 ): Promise<{ items: Album[] }> {
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
-  return { items: selectRecentlyPlayed(albums, limit).map(plexClient.toPublicAlbum) };
+  const albums = await targetedLibrary.getProfileAlbums(
+    "recently-played",
+    config,
+    libraryId,
+    limit,
+  );
+  return { items: albums.map(plexClient.toPublicAlbum) };
 }
 
 export async function getRecentlyAdded(
@@ -174,8 +149,13 @@ export async function getRecentlyAdded(
   libraryId: string,
   limit = HOME_PREVIEW_LIMIT,
 ): Promise<{ items: Album[] }> {
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
-  return { items: selectRecentlyAdded(albums, limit).map(plexClient.toPublicAlbum) };
+  const albums = await targetedLibrary.getProfileAlbums(
+    "recently-added",
+    config,
+    libraryId,
+    limit,
+  );
+  return { items: albums.map(plexClient.toPublicAlbum) };
 }
 
 export async function getHiddenGems(
@@ -183,8 +163,8 @@ export async function getHiddenGems(
   libraryId: string,
   limit = HOME_PREVIEW_LIMIT,
 ): Promise<{ items: Album[] }> {
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
-  return { items: selectHiddenGems(albums, limit).map(plexClient.toPublicAlbum) };
+  const albums = await targetedLibrary.getProfileAlbums("hidden-gems", config, libraryId, limit);
+  return { items: albums.map(plexClient.toPublicAlbum) };
 }
 
 export async function getRandomPicks(
@@ -192,8 +172,8 @@ export async function getRandomPicks(
   libraryId: string,
   limit = HOME_PREVIEW_LIMIT,
 ): Promise<{ items: Album[] }> {
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
-  return { items: selectRandomPicks(albums, limit).map(plexClient.toPublicAlbum) };
+  const albums = await targetedLibrary.getProfileAlbums("random-picks", config, libraryId, limit);
+  return { items: albums.map(plexClient.toPublicAlbum) };
 }
 
 export async function getArtistSpotlights(
@@ -202,8 +182,9 @@ export async function getArtistSpotlights(
   libraryId: string,
   limit = HOME_PREVIEW_LIMIT,
 ): Promise<{ items: ArtistSpotlight[] }> {
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
-  return { items: await buildArtistSpotlights(db, albums, limit) };
+  return {
+    items: await targetedLibrary.loadArtistSpotlightsProfile(db, config, libraryId, limit),
+  };
 }
 
 /** @deprecated Prefer per-group endpoints; kept for backward compatibility. */
@@ -213,20 +194,19 @@ export async function getAlbumGroups(
   libraryId: string,
 ): Promise<AlbumGroupsResponse> {
   const limit = HOME_PREVIEW_LIMIT;
-  const albums = await loadAlbumsWithPlayCounts(config, libraryId);
   const [recentlyPlayed, recentlyAdded, hiddenGems, randomPicks, artistSpotlights] =
     await Promise.all([
-      Promise.resolve(selectRecentlyPlayed(albums, limit).map(plexClient.toPublicAlbum)),
-      Promise.resolve(selectRecentlyAdded(albums, limit).map(plexClient.toPublicAlbum)),
-      Promise.resolve(selectHiddenGems(albums, limit).map(plexClient.toPublicAlbum)),
-      Promise.resolve(selectRandomPicks(albums, limit).map(plexClient.toPublicAlbum)),
-      buildArtistSpotlights(db, albums, limit),
+      getRecentlyPlayed(config, libraryId, limit),
+      getRecentlyAdded(config, libraryId, limit),
+      getHiddenGems(config, libraryId, limit),
+      getRandomPicks(config, libraryId, limit),
+      getArtistSpotlights(db, config, libraryId, limit),
     ]);
   return {
-    recentlyPlayed,
-    recentlyAdded,
-    hiddenGems,
-    randomPicks,
-    artistSpotlights,
+    recentlyPlayed: recentlyPlayed.items,
+    recentlyAdded: recentlyAdded.items,
+    hiddenGems: hiddenGems.items,
+    randomPicks: randomPicks.items,
+    artistSpotlights: artistSpotlights.items,
   };
 }

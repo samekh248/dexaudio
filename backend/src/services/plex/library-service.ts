@@ -1,4 +1,5 @@
 import type { Album, AlbumPage, SearchResults, Track } from "@dexaudio/shared-types";
+import { decodeXmlEntities } from "../../lib/xml-entities.js";
 import type { PlexConfig } from "./plex-client.js";
 import * as plexClient from "./plex-client.js";
 import { proxyArtUrl } from "./plex-client.js";
@@ -43,6 +44,7 @@ export async function getAlbums(
   return result;
 }
 
+/** Browse All and legacy /groups only; not used by per-group home endpoints. */
 export async function getAllAlbumsWithStats(
   config: PlexConfig,
   libraryId: string,
@@ -117,7 +119,7 @@ function parseAttrs(s: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) attrs[m[1]] = m[2];
+  while ((m = re.exec(s)) !== null) attrs[m[1]] = decodeXmlEntities(m[2]);
   return attrs;
 }
 

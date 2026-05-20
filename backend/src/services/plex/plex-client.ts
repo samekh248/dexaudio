@@ -1,4 +1,5 @@
 import { ValidationError } from "../../lib/errors.js";
+import { decodeXmlEntities } from "../../lib/xml-entities.js";
 import { PLEX_CLIENT_ID, PLEX_PRODUCT_NAME } from "../../lib/config.js";
 import type { Album, PlexLibrary, Track, TrackFormat } from "@dexaudio/shared-types";
 
@@ -84,7 +85,7 @@ function parseDirAttrs(attrString: string): Record<string, string> {
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrString)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = decodeXmlEntities(m[2]);
   }
   return attrs;
 }
@@ -113,14 +114,19 @@ function codecToFormat(codec: string): TrackFormat {
   return "unsupported";
 }
 
+function plexText(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  return decodeXmlEntities(value);
+}
+
 export function parseTrackFromMetadata(attrs: Record<string, string>): Track {
   const format = codecToFormat(attrs.codec ?? "");
 
   return {
     id: attrs.ratingKey ?? attrs.key ?? "",
-    title: attrs.title ?? "Unknown",
-    artist: attrs.grandparentTitle ?? attrs.originalTitle ?? "Unknown Artist",
-    album: attrs.parentTitle ?? "Unknown Album",
+    title: plexText(attrs.title, "Unknown"),
+    artist: plexText(attrs.grandparentTitle ?? attrs.originalTitle, "Unknown Artist"),
+    album: plexText(attrs.parentTitle, "Unknown Album"),
     albumId: attrs.parentRatingKey,
     durationMs: Number(attrs.duration ?? 0),
     format,
@@ -147,8 +153,8 @@ export function parseAlbumFromMetadata(attrs: Record<string, string>): AlbumWith
 
   return {
     id: attrs.ratingKey ?? attrs.key ?? "",
-    title: attrs.title ?? "Unknown",
-    artist: attrs.parentTitle ?? attrs.grandparentTitle ?? "Unknown Artist",
+    title: plexText(attrs.title, "Unknown"),
+    artist: plexText(attrs.parentTitle ?? attrs.grandparentTitle, "Unknown Artist"),
     artistId: attrs.parentRatingKey ?? attrs.grandparentRatingKey,
     year: attrs.year ? Number(attrs.year) : undefined,
     artUrl: attrs.thumb,
@@ -187,36 +193,62 @@ export async function fetchAllAlbums(
   return all;
 }
 
+function aggregateTrackPlayCountsFromXml(xml: string, counts: Map<string, number>): void {
+  const trackRegex = /<Track\b([^>]*?)\/?>/g;
+  let match: RegExpExecArray | null;
+  while ((match = trackRegex.exec(xml)) !== null) {
+    const attrs = parseAttrs(match[1]);
+    const albumKey = attrs.parentRatingKey;
+    if (!albumKey) continue;
+    const views = Number(attrs.viewCount ?? 1);
+    counts.set(albumKey, (counts.get(albumKey) ?? 0) + (views > 0 ? views : 1));
+  }
+}
+
 /** Aggregate track views in the trailing 30 days by parent album rating key. */
 export async function fetchAlbumPlayCounts30d(
   config: PlexConfig,
   libraryId: string,
 ): Promise<Map<string, number>> {
+  return fetchAlbumPlayCounts30dBounded(config, libraryId, {
+    maxPages: Number.POSITIVE_INFINITY,
+    stopWhenAlbums: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Bounded 30-day play aggregation for recently-played (avoids scanning entire play history). */
+export async function fetchAlbumPlayCounts30dBounded(
+  config: PlexConfig,
+  libraryId: string,
+  options: { maxPages?: number; pageSize?: number; stopWhenAlbums?: number } = {},
+): Promise<Map<string, number>> {
   const base = normalizeUrl(config.serverUrl);
   const thirtyDaysAgoSec = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
   const counts = new Map<string, number>();
-  const pageSize = 500;
+  const pageSize = options.pageSize ?? 500;
+  const maxPages = options.maxPages ?? 2;
+  const stopWhenAlbums = options.stopWhenAlbums ?? 60;
   let start = 0;
   let total = Infinity;
+  let pages = 0;
 
-  while (start < total) {
+  while (start < total && pages < maxPages) {
     const url = `${base}/library/sections/${libraryId}/all?type=10&viewedAt>=${thirtyDaysAgoSec}&X-Plex-Container-Start=${start}&X-Plex-Container-Size=${pageSize}&X-Plex-Token=${encodeURIComponent(config.token)}`;
-    const res = await fetch(url);
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch {
+      break;
+    }
     if (!res.ok) break;
     const xml = await res.text();
     const containerMatch = xml.match(/<MediaContainer[^>]*totalSize="(\d+)"/);
     total = containerMatch ? Number(containerMatch[1]) : 0;
-    const trackRegex = /<Track\b([^>]*?)\/?>/g;
-    let match: RegExpExecArray | null;
-    while ((match = trackRegex.exec(xml)) !== null) {
-      const attrs = parseAttrs(match[1]);
-      const albumKey = attrs.parentRatingKey;
-      if (!albumKey) continue;
-      const views = Number(attrs.viewCount ?? 1);
-      counts.set(albumKey, (counts.get(albumKey) ?? 0) + (views > 0 ? views : 1));
-    }
+    aggregateTrackPlayCountsFromXml(xml, counts);
     start += pageSize;
+    pages += 1;
     if (total === 0) break;
+    if (counts.size >= stopWhenAlbums) break;
   }
 
   return counts;
@@ -249,10 +281,102 @@ export async function fetchAlbums(
   const base = normalizeUrl(config.serverUrl);
   const start = (page - 1) * pageSize;
   const url = `${base}/library/sections/${libraryId}/all?X-Plex-Token=${encodeURIComponent(config.token)}&type=9&X-Plex-Container-Start=${start}&X-Plex-Container-Size=${pageSize}`;
-  const res = await fetch(url);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    return { items: [], total: 0 };
+  }
   if (!res.ok) return { items: [], total: 0 };
   const xml = await res.text();
   return parseAlbumPageXml(xml, page);
+}
+
+export async function fetchAlbumsSorted(
+  config: PlexConfig,
+  libraryId: string,
+  options: { sort: string; start: number; size: number },
+): Promise<{ items: AlbumWithStats[]; total: number }> {
+  const base = normalizeUrl(config.serverUrl);
+  const { sort, start, size } = options;
+  const url = `${base}/library/sections/${libraryId}/all?X-Plex-Token=${encodeURIComponent(config.token)}&type=9&sort=${encodeURIComponent(sort)}&X-Plex-Container-Start=${start}&X-Plex-Container-Size=${size}`;
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    return { items: [], total: 0 };
+  }
+  if (!res.ok) return { items: [], total: 0 };
+  const xml = await res.text();
+  return parseAlbumPageXml(xml, 1);
+}
+
+export interface PlexArtistEntry {
+  id: string;
+  title: string;
+  childCount?: number;
+}
+
+export async function fetchArtistsPage(
+  config: PlexConfig,
+  libraryId: string,
+  options: { start: number; size: number },
+): Promise<{ items: PlexArtistEntry[]; total: number }> {
+  const base = normalizeUrl(config.serverUrl);
+  const { start, size } = options;
+  const url = `${base}/library/sections/${libraryId}/all?X-Plex-Token=${encodeURIComponent(config.token)}&type=8&X-Plex-Container-Start=${start}&X-Plex-Container-Size=${size}`;
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch {
+    return { items: [], total: 0 };
+  }
+  if (!res.ok) return { items: [], total: 0 };
+  const xml = await res.text();
+  const containerMatch = xml.match(/<MediaContainer[^>]*totalSize="(\d+)"/);
+  const total = containerMatch ? Number(containerMatch[1]) : 0;
+  const items: PlexArtistEntry[] = [];
+  const dirRegex = /<Directory\b([^>]*?)\/?>/g;
+  let match: RegExpExecArray | null;
+  while ((match = dirRegex.exec(xml)) !== null) {
+    const attrs = parseAttrs(match[1]);
+    const id = attrs.ratingKey ?? attrs.key;
+    const title = attrs.title;
+    if (!id || !title) continue;
+    const childCountRaw = attrs.childCount;
+    const childCount =
+      childCountRaw !== undefined && childCountRaw !== ""
+        ? Number(childCountRaw)
+        : undefined;
+    items.push({
+      id,
+      title,
+      childCount: childCount !== undefined && !Number.isNaN(childCount) ? childCount : undefined,
+    });
+  }
+  return { items, total: total || items.length };
+}
+
+const METADATA_BATCH_CAP = 50;
+
+export async function fetchAlbumMetadataBatch(
+  config: PlexConfig,
+  ratingKeys: string[],
+): Promise<AlbumWithStats[]> {
+  const keys = ratingKeys.slice(0, METADATA_BATCH_CAP);
+  const base = normalizeUrl(config.serverUrl);
+  const results = await Promise.all(
+    keys.map(async (id) => {
+      const url = `${base}/library/metadata/${id}?X-Plex-Token=${encodeURIComponent(config.token)}`;
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const xml = await res.text();
+      const dirMatch = xml.match(/<Directory\b([^>]*?)\/?>/i);
+      if (!dirMatch) return null;
+      return parseAlbumFromMetadata(parseAttrs(dirMatch[1]));
+    }),
+  );
+  return results.filter((a): a is AlbumWithStats => a !== null);
 }
 
 export function parseAlbumPageXml(xml: string, page: number): { items: AlbumWithStats[]; total: number } {
@@ -273,7 +397,7 @@ function parseAttrs(attrString: string): Record<string, string> {
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrString)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = decodeXmlEntities(m[2]);
   }
   return attrs;
 }
