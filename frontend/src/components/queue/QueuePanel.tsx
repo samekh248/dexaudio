@@ -1,5 +1,6 @@
 import type { QueueItem } from "@/stores/playback-queue-store";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { X } from "lucide-react";
 
 interface QueuePanelProps {
@@ -8,13 +9,14 @@ interface QueuePanelProps {
   onSelect: (index: number) => void;
   onRemove: (index: number) => void;
   onReorder?: (from: number, to: number) => void;
+  className?: string;
 }
 
-export function QueuePanel({ items, currentIndex, onSelect, onRemove }: QueuePanelProps) {
+export function QueuePanel({ items, currentIndex, onSelect, onRemove, className }: QueuePanelProps) {
   return (
-    <div className="space-y-2">
-      <h2 className="text-sm font-semibold">Queue</h2>
-      <ul className="space-y-1 max-h-64 overflow-y-auto">
+    <div className={cn("flex min-h-0 flex-col gap-2", className)}>
+      <h2 className="shrink-0 text-sm font-semibold">Queue</h2>
+      <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto rounded-lg border border-border bg-card p-2">
         {items.map((item, index) => (
           <li
             key={`${item.track.id}-${index}`}
