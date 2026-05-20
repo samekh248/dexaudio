@@ -11,6 +11,8 @@ export interface QueueItem {
 interface PlaybackQueueState {
   items: QueueItem[];
   currentIndex: number;
+  skippedIndices: Set<number>;
+  loadGeneration: number;
   playNow: (tracks: Track[]) => void;
   addToQueue: (tracks: Track[]) => void;
   addAutoTracks: (tracks: Track[]) => void;
@@ -20,11 +22,15 @@ interface PlaybackQueueState {
   previous: () => void;
   setIndex: (index: number) => void;
   clearAutoItems: () => void;
+  markSkipped: (index: number) => void;
+  resetSkipped: () => void;
 }
 
 export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
   items: [],
   currentIndex: 0,
+  skippedIndices: new Set<number>(),
+  loadGeneration: 0,
 
   playNow: (tracks) => {
     const userItems = get().items.filter((i) => i.source === "user");
@@ -32,8 +38,23 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
       ...tracks.map((t) => ({ track: t, source: "user" as const })),
       ...userItems,
     ];
-    set({ items: newItems, currentIndex: 0 });
+    set((s) => ({
+      items: newItems,
+      currentIndex: 0,
+      skippedIndices: new Set(),
+      loadGeneration: s.loadGeneration + 1,
+    }));
   },
+
+  markSkipped: (index) => {
+    set((s) => {
+      const skippedIndices = new Set(s.skippedIndices);
+      skippedIndices.add(index);
+      return { skippedIndices };
+    });
+  },
+
+  resetSkipped: () => set({ skippedIndices: new Set() }),
 
   addToQueue: (tracks) => {
     set((s) => ({

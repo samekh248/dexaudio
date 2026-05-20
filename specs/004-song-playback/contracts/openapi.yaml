@@ -1,0 +1,181 @@
+openapi: 3.1.0
+info:
+  title: Dexaudio — Song Playback API Changes
+  version: 0.4.0
+  description: >
+    Changes to the existing `/api/v1/stream/:trackId` endpoint for feature 004
+    (Song Playback). No new endpoints are introduced; this contract documents
+    the modified behavior of the existing stream proxy.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /stream/{trackId}:
+    get:
+      operationId: streamTrack
+      summary: Stream audio for a track
+      description: >
+        Proxies audio bytes from the Plex server for the given track.
+
+        **New behavior (004)**:
+        1. Fetches track metadata from Plex to determine the codec.
+        2. If the codec is browser-native (FLAC, MP3, AAC/M4A, OGG/Opus),
+           streams the raw file bytes (direct play).
+        3. If the codec requires transcoding (ALAC, WMA, WAV, or unknown),
+           requests Plex's universal transcode endpoint for an MP3 320 kbps
+           stream and proxies that instead.
+        4. If both direct play and transcoding fail, returns a structured error
+           response.
+      tags:
+        - Stream
+      parameters:
+        - name: trackId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Plex rating key identifying the track.
+      responses:
+        "200":
+          description: Audio stream (direct play or transcoded).
+          headers:
+            Content-Type:
+              schema:
+                type: string
+              description: >
+                MIME type of the audio stream. Examples: `audio/flac`,
+                `audio/mpeg`, `audio/aac`, `audio/ogg`.
+          content:
+            audio/*:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Plex authentication expired or invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example:
+                message: "Plex authentication expired"
+                code: "AUTH_EXPIRED"
+                action: "Re-authenticate with your Plex account"
+        "404":
+          description: Track not found on Plex server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example:
+                message: "Track not found"
+                code: "NOT_FOUND"
+                action: "The track may have been removed from your Plex library"
+        "415":
+          description: Unsupported audio format (direct play and transcode both failed).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example:
+                message: "Unsupported audio format (WMA)"
+                code: "UNSUPPORTED_FORMAT"
+                action: "This format cannot be played. Skip this track."
+        "502":
+          description: Plex server unreachable or returned an unexpected error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+              example:
+                message: "Could not reach Plex server"
+                code: "BAD_GATEWAY"
+                action: "Check that your Plex server is running and reachable"
+
+components:
+  schemas:
+    ErrorBody:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: Human-readable error summary.
+        code:
+          type: string
+          description: >
+            Machine-readable error code. One of: UNSUPPORTED_FORMAT,
+            NOT_FOUND, AUTH_EXPIRED, BAD_GATEWAY, NETWORK_ERROR, UNKNOWN.
+        action:
+          type: string
+          description: Suggested next step for the user.
+
+    TrackFormat:
+      type: string
+      description: Audio format as detected from Plex metadata.
+      enum:
+        - flac
+        - mp3
+        - aac
+        - ogg
+        - wav
+        - alac
+        - wma
+        - unsupported
+
+    PlaybackErrorCategory:
+      type: string
+      description: Classification of a playback failure.
+      enum:
+        - unsupported_format
+        - server_unreachable
+        - auth_expired
+        - track_not_found
+        - network_interrupted
+        - autoplay_blocked
+        - unknown
+
+    PlaybackAffordance:
+      type: string
+      description: An action the user can take in response to a failure.
+      enum:
+        - skip
+        - retry
+        - sign_in
+        - back_to_library
+        - retry_queue
+        - play_gesture
+
+    PlaybackFailure:
+      type: object
+      required:
+        - category
+        - message
+        - affordances
+        - timestamp
+      properties:
+        category:
+          $ref: "#/components/schemas/PlaybackErrorCategory"
+        message:
+          type: string
+          description: User-comprehensible failure summary.
+        trackTitle:
+          type: string
+        trackArtist:
+          type: string
+        trackId:
+          type: string
+        technicalDetail:
+          type: string
+          description: >
+            Reason code, track identifier, and server-provided detail for
+            the "See details" affordance.
+        affordances:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybackAffordance"
+          minItems: 1
+        timestamp:
+          type: string
+          format: date-time

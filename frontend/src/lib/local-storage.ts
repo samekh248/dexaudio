@@ -8,6 +8,7 @@ export const StorageKeys = {
   preCacheLookAhead: `${PREFIX}playback.preCacheLookAhead`,
   preCapGb: `${PREFIX}cache.preCapGb`,
   permanentCapGb: `${PREFIX}cache.permanentCapGb`,
+  volume: `${PREFIX}volume`,
   customPresets: `${PREFIX}customPresets`,
   activeLibraryId: `${PREFIX}library.activeId`,
 } as const;

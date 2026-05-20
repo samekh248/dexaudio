@@ -4,11 +4,18 @@ import {
   fetchAlbumTracks,
   fetchLibraries,
   fetchSimilarTracks,
+  fetchTrackMetadata,
   getStreamUrl,
+  getTranscodeUrl,
+  isBrowserNativeFormat,
   parseAlbumFromMetadata,
   parseAlbumPageXml,
   parseLibrariesXml,
   parseTrackFromMetadata,
+  parseTrackMetadataXml,
+  plexMediaHeaders,
+  proxyArtUrl,
+  resolveTrackArtPath,
   validateConnection,
 } from "../../src/services/plex/plex-client.js";
 import { ValidationError } from "../../src/lib/errors.js";
@@ -25,6 +32,103 @@ describe("plex-parser", () => {
     expect(libs[0]).toEqual({ id: "1", title: "Music", type: "artist" });
   });
 
+  it("resolves track art from parent album when thumb is absent", () => {
+    expect(
+      resolveTrackArtPath({ parentRatingKey: "50", ratingKey: "99" }),
+    ).toBe("/library/metadata/50/thumb");
+  });
+
+  it("resolves track art from absolute thumb path", () => {
+    expect(resolveTrackArtPath({ thumb: "/library/metadata/50/thumb/1" })).toBe(
+      "/library/metadata/50/thumb/1",
+    );
+  });
+
+  it("resolves track art from parentThumb and relative thumb", () => {
+    expect(resolveTrackArtPath({ parentThumb: "/library/metadata/50/thumb/9" })).toBe(
+      "/library/metadata/50/thumb/9",
+    );
+    expect(
+      resolveTrackArtPath({ parentRatingKey: "50", thumb: "subdir/cover.jpg" }),
+    ).toBe("/library/metadata/50/thumb/subdir/cover.jpg");
+  });
+
+  it("detects ogg wav alac wma codecs", () => {
+    expect(parseTrackFromMetadata({ ratingKey: "1", title: "T", codec: "opus" }).format).toBe(
+      "ogg",
+    );
+    expect(parseTrackFromMetadata({ ratingKey: "1", title: "T", codec: "wave" }).format).toBe(
+      "wav",
+    );
+    expect(parseTrackFromMetadata({ ratingKey: "1", title: "T", codec: "alac" }).format).toBe(
+      "alac",
+    );
+    expect(parseTrackFromMetadata({ ratingKey: "1", title: "T", codec: "wmav2" }).format).toBe(
+      "wma",
+    );
+  });
+
+  it("classifies browser-native formats for html5 playback", () => {
+    expect(isBrowserNativeFormat("mp3")).toBe(true);
+    expect(isBrowserNativeFormat("aac")).toBe(true);
+    expect(isBrowserNativeFormat("ogg")).toBe(true);
+    expect(isBrowserNativeFormat("flac")).toBe(false);
+    expect(isBrowserNativeFormat("alac")).toBe(false);
+  });
+
+  it("builds transcode and proxy URLs", () => {
+    const config = { serverUrl: "http://plex.local/", token: "tok" };
+    expect(getStreamUrl(config, "42")).toContain("/library/metadata/42/file");
+    expect(getTranscodeUrl(config, "42", 192)).toContain("musicBitrate=192");
+    expect(getTranscodeUrl(config, "42")).toContain("maxAudioBitrate=320");
+    expect(proxyArtUrl("/library/metadata/1/thumb")).toContain(
+      "/api/v1/plex/photo?path=%2Flibrary%2Fmetadata%2F1%2Fthumb",
+    );
+    expect(proxyArtUrl(undefined)).toBeUndefined();
+    expect(plexMediaHeaders("tok")["X-Plex-Token"]).toBe("tok");
+  });
+
+  it("parseTrackMetadataXml returns null without Track element", () => {
+    expect(parseTrackMetadataXml("<MediaContainer/>")).toBeNull();
+  });
+
+  it("fetchTrackMetadata handles auth, missing, and success responses", async () => {
+    const config = { serverUrl: "http://plex", token: "t" };
+    const trackXml = `<MediaContainer><Track ratingKey="9" title="Hi" codec="mp3" duration="1000"/></MediaContainer>`;
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ status: 401, ok: false, text: async () => "" }),
+    );
+    expect(await fetchTrackMetadata(config, "9")).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ status: 404, ok: false, text: async () => "" }),
+    );
+    expect(await fetchTrackMetadata(config, "9")).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ status: 200, ok: true, text: async () => trackXml }),
+    );
+    const track = await fetchTrackMetadata(config, "9");
+    expect(track?.id).toBe("9");
+    expect(track?.format).toBe("mp3");
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValueOnce({ status: 503, ok: false, text: async () => "error" }),
+    );
+    await expect(fetchTrackMetadata(config, "9")).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  it("reads codec from nested Media element", () => {
+    const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="1000"><Media codec="flac"/></Track></MediaContainer>`;
+    const track = parseTrackMetadataXml(xml);
+    expect(track?.format).toBe("flac");
+  });
+
   it("parses track metadata with format", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "100",
@@ -38,11 +142,21 @@ describe("plex-parser", () => {
     expect(track.durationMs).toBe(180000);
   });
 
-  it("marks unsupported codecs", () => {
+  it("detects aac codec", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "1",
       title: "X",
       codec: "aac",
+      duration: "1000",
+    });
+    expect(track.format).toBe("aac");
+  });
+
+  it("marks unsupported codecs", () => {
+    const track = parseTrackFromMetadata({
+      ratingKey: "1",
+      title: "X",
+      codec: "ape",
       duration: "1000",
     });
     expect(track.format).toBe("unsupported");
@@ -113,10 +227,11 @@ describe("plex-parser", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "2",
       title: "S",
+      parentRatingKey: "50",
       thumb: "/thumb",
       viewCount: "3",
     });
-    expect(track.artUrl).toBeDefined();
+    expect(track.artUrl).toBe("/thumb");
     expect(track.playCount).toBe(3);
   });
 

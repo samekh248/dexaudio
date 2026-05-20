@@ -1,5 +1,6 @@
 import { ValidationError } from "../../lib/errors.js";
-import type { Album, PlexLibrary, Track } from "@dexaudio/shared-types";
+import { PLEX_CLIENT_ID, PLEX_PRODUCT_NAME } from "../../lib/config.js";
+import type { Album, PlexLibrary, Track, TrackFormat } from "@dexaudio/shared-types";
 
 export interface AlbumWithStats extends Album {
   artistId?: string;
@@ -15,6 +16,18 @@ export interface PlexConfig {
 
 function normalizeUrl(url: string): string {
   return url.replace(/\/$/, "");
+}
+
+export function plexMediaHeaders(token: string): Record<string, string> {
+  return {
+    Accept: "*/*",
+    "X-Plex-Token": token,
+    "X-Plex-Client-Identifier": PLEX_CLIENT_ID,
+    "X-Plex-Product": PLEX_PRODUCT_NAME,
+    "X-Plex-Version": "1.0.0",
+    "X-Plex-Device": "Web",
+    "X-Plex-Platform": "Web",
+  };
 }
 
 export async function validateConnection(config: PlexConfig, timeoutMs = 4000): Promise<boolean> {
@@ -76,11 +89,32 @@ function parseDirAttrs(attrString: string): Record<string, string> {
   return attrs;
 }
 
+/** Plex album cover path for a track (parent album metadata, not the track key). */
+export function resolveTrackArtPath(attrs: Record<string, string>): string | undefined {
+  const thumb = attrs.thumb;
+  if (thumb?.startsWith("/")) return thumb;
+  if (attrs.parentThumb?.startsWith("/")) return attrs.parentThumb;
+  if (attrs.grandparentThumb?.startsWith("/")) return attrs.grandparentThumb;
+  const albumKey = attrs.parentRatingKey;
+  if (!albumKey) return undefined;
+  if (thumb) return `/library/metadata/${albumKey}/thumb/${thumb}`;
+  return `/library/metadata/${albumKey}/thumb`;
+}
+
+function codecToFormat(codec: string): TrackFormat {
+  const c = codec.toLowerCase();
+  if (c.includes("flac")) return "flac";
+  if (c.includes("mp3") || c === "mp3") return "mp3";
+  if (c.includes("aac") || c.includes("m4a")) return "aac";
+  if (c.includes("ogg") || c.includes("opus") || c.includes("vorbis")) return "ogg";
+  if (c.includes("wav") || c.includes("wave")) return "wav";
+  if (c.includes("alac")) return "alac";
+  if (c.includes("wma") || c.includes("wmav2")) return "wma";
+  return "unsupported";
+}
+
 export function parseTrackFromMetadata(attrs: Record<string, string>): Track {
-  const codec = (attrs.codec ?? "").toLowerCase();
-  let format: Track["format"] = "unsupported";
-  if (codec.includes("flac")) format = "flac";
-  else if (codec.includes("mp3") || codec === "mp3") format = "mp3";
+  const format = codecToFormat(attrs.codec ?? "");
 
   return {
     id: attrs.ratingKey ?? attrs.key ?? "",
@@ -90,7 +124,7 @@ export function parseTrackFromMetadata(attrs: Record<string, string>): Track {
     albumId: attrs.parentRatingKey,
     durationMs: Number(attrs.duration ?? 0),
     format,
-    artUrl: attrs.thumb ? `/library/metadata/${attrs.ratingKey}/thumb` : undefined,
+    artUrl: resolveTrackArtPath(attrs),
     playCount: attrs.viewCount ? Number(attrs.viewCount) : undefined,
   };
 }
@@ -281,4 +315,44 @@ export async function fetchSimilarTracks(
 export function getStreamUrl(config: PlexConfig, trackId: string): string {
   const base = normalizeUrl(config.serverUrl);
   return `${base}/library/metadata/${trackId}/file?X-Plex-Token=${encodeURIComponent(config.token)}`;
+}
+
+export function getTranscodeUrl(config: PlexConfig, trackId: string, bitrate = 320): string {
+  const base = normalizeUrl(config.serverUrl);
+  const path = `/library/metadata/${trackId}`;
+  const params = new URLSearchParams({
+    path,
+    protocol: "http",
+    musicBitrate: String(bitrate),
+    maxAudioBitrate: String(bitrate),
+    session: PLEX_CLIENT_ID,
+  });
+  return `${base}/music/:/transcode/universal/start.mp3?${params.toString()}&X-Plex-Token=${encodeURIComponent(config.token)}&X-Plex-Client-Identifier=${encodeURIComponent(PLEX_CLIENT_ID)}`;
+}
+
+/** Formats decodable by Howler html5 mode (HTML5 Audio element). FLAC is excluded — use Plex transcode. */
+export function isBrowserNativeFormat(format: TrackFormat): boolean {
+  return format === "mp3" || format === "aac" || format === "ogg";
+}
+
+export function parseTrackMetadataXml(xml: string): Track | null {
+  const trackMatch = xml.match(/<Track\b([^>]*?)\/?>/i);
+  if (!trackMatch) return null;
+  const attrs = parseAttrs(trackMatch[1]);
+  const mediaMatch = xml.match(/<Media\b([^>]*?)\/?>/i);
+  if (mediaMatch && !attrs.codec) {
+    const mediaAttrs = parseAttrs(mediaMatch[1]);
+    if (mediaAttrs.codec) attrs.codec = mediaAttrs.codec;
+  }
+  return parseTrackFromMetadata(attrs);
+}
+
+export async function fetchTrackMetadata(config: PlexConfig, trackId: string): Promise<Track | null> {
+  const base = normalizeUrl(config.serverUrl);
+  const url = `${base}/library/metadata/${trackId}`;
+  const res = await fetch(url, { headers: plexMediaHeaders(config.token) });
+  if (res.status === 401) return null;
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ValidationError("Could not reach Plex server", "Check URL and token");
+  return parseTrackMetadataXml(await res.text());
 }

@@ -8,6 +8,7 @@ interface AudioPlayerProps {
   duration: number;
   volume: number;
   fromCache?: boolean;
+  loading?: boolean;
   onPlay: () => void;
   onPause: () => void;
   onSeek: (ms: number) => void;
@@ -28,6 +29,7 @@ export function AudioPlayer({
   duration,
   volume,
   fromCache,
+  loading,
   onPlay,
   onPause,
   onSeek,
@@ -48,9 +50,10 @@ export function AudioPlayer({
         aria-label="Seek"
       />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{formatMs(position)}</span>
+        <span aria-live="polite">{formatMs(position)}</span>
         <span>{formatMs(duration)}</span>
       </div>
+      {loading ? <p className="text-xs text-muted-foreground">Loading…</p> : null}
       <div className="flex items-center justify-center gap-2">
         <Button variant="ghost" size="icon" onClick={onPrevious} aria-label="Previous">
           <SkipBack className="h-5 w-5" />

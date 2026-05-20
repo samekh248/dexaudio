@@ -3,10 +3,11 @@ import { useParams } from "react-router-dom";
 import { api } from "@/services/api-client";
 import { TrackRow } from "@/components/library/TrackRow";
 import { usePlaybackQueue } from "@/stores/playback-queue-store";
+import { usePlayNow } from "@/hooks/use-play-now";
 
 export function AlbumDetailPage() {
   const { albumId } = useParams<{ albumId: string }>();
-  const playNow = usePlaybackQueue((s) => s.playNow);
+  const playNow = usePlayNow();
   const addToQueue = usePlaybackQueue((s) => s.addToQueue);
 
   const { data: tracks, isLoading } = useQuery({

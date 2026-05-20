@@ -31,7 +31,12 @@ export async function getConnectionPublic(db: Db, appSecret: string): Promise<Pl
   const rows = await db.select().from(plexConnections).orderBy(desc(plexConnections.updatedAt)).limit(1);
   const row = rows[0];
   if (!row) return { connected: false };
-  return toPublic(row, maskSecret(decrypt(Buffer.from(row.tokenEncrypted), appSecret)));
+  try {
+    return toPublic(row, maskSecret(decrypt(Buffer.from(row.tokenEncrypted), appSecret)));
+  } catch {
+    // Stale or corrupted ciphertext — treat as disconnected.
+    return { connected: false };
+  }
 }
 
 export async function saveConnection(

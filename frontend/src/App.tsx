@@ -13,6 +13,8 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { PlexSetupPage } from "@/pages/onboarding/PlexSetupPage";
 import { useThemeSync } from "@/hooks/use-theme-sync";
 import { useLibraryRefreshOnLaunch } from "@/hooks/use-library-refresh";
+import { Toaster } from "@/components/ui/sonner";
+import { PlayerProvider } from "@/contexts/player-context";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
@@ -45,7 +47,10 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppRoutes />
+        <PlayerProvider>
+          <AppRoutes />
+          <Toaster />
+        </PlayerProvider>
       </BrowserRouter>
     </QueryClientProvider>
   );
