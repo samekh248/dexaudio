@@ -7,7 +7,7 @@ export function BrowseAllTile() {
   return (
     <Link
       to="/albums/all"
-      className="block w-[180px] shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="block w-[160px] shrink-0 rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring"
       aria-label="Browse all albums"
     >
       <Card className="h-full overflow-hidden transition hover:shadow-md">

@@ -3,6 +3,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
 import { AlbumsHomePage } from "@/pages/AlbumsHomePage";
 import { BrowseAllAlbumsPage } from "@/pages/BrowseAllAlbumsPage";
+import { CategoryAlbumsPage } from "@/pages/CategoryAlbumsPage";
+import { CategorySpotlightsPage } from "@/pages/CategorySpotlightsPage";
 import { AlbumDetailPage } from "@/pages/AlbumDetailPage";
 import { ArtistAlbumsPage } from "@/pages/ArtistAlbumsPage";
 import { NowPlayingPage } from "@/pages/NowPlayingPage";
@@ -28,6 +30,10 @@ function AppRoutes() {
       <Route element={<AppShell />}>
         <Route index element={<AlbumsHomePage />} />
         <Route path="albums/all" element={<BrowseAllAlbumsPage />} />
+        <Route path="library/recently-added" element={<CategoryAlbumsPage />} />
+        <Route path="library/recently-played" element={<CategoryAlbumsPage />} />
+        <Route path="library/hidden-gems" element={<CategoryAlbumsPage />} />
+        <Route path="library/artist-spotlights" element={<CategorySpotlightsPage />} />
         <Route path="albums" element={<Navigate to="/" replace />} />
         <Route path="albums/:albumId" element={<AlbumDetailPage />} />
         <Route path="artists/:artistId" element={<ArtistAlbumsPage />} />

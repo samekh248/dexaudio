@@ -15,6 +15,8 @@ export function useLibraryRefreshOnLaunch() {
         const libraryId = getItem(StorageKeys.activeLibraryId, "");
         if (!libraryId) return;
         await queryClient.invalidateQueries({ queryKey: ["albums", libraryId] });
+        await queryClient.invalidateQueries({ queryKey: ["library-home-groups", libraryId] });
+        await queryClient.invalidateQueries({ queryKey: ["album-group"] });
         await queryClient.invalidateQueries({ queryKey: ["top-stats"] });
       } catch {
         // settings unavailable until backend is up

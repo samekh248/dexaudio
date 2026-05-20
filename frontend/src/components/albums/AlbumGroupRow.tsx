@@ -3,20 +3,30 @@ import type { ReactNode } from "react";
 interface AlbumGroupRowProps {
   title: string;
   entries: ReactNode[];
+  /** When true, heading is rendered by parent LibraryGroupSection. */
+  hideHeading?: boolean;
 }
 
-export function AlbumGroupRow({ title, entries }: AlbumGroupRowProps) {
-  const visible = entries.slice(0, 5);
-  if (visible.length === 0) return null;
+export function AlbumGroupRow({ title, entries, hideHeading = false }: AlbumGroupRowProps) {
+  if (entries.length === 0) return null;
 
   const headingId = `group-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
-    <section className="mb-8" aria-labelledby={headingId}>
-      <h2 id={headingId} className="mb-3 text-lg font-semibold">
-        {title}
-      </h2>
-      <div className="flex gap-4 overflow-x-auto pb-2">{visible}</div>
-    </section>
+    <div className={hideHeading ? undefined : "mb-8"}>
+      {!hideHeading ? (
+        <h2 id={headingId} className="mb-3 text-lg font-semibold">
+          {title}
+        </h2>
+      ) : null}
+      <div
+        role="region"
+        aria-label={`${title} carousel`}
+        tabIndex={0}
+        className="flex gap-4 overflow-x-auto overscroll-x-contain pb-2 scroll-smooth focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {entries}
+      </div>
+    </div>
   );
 }

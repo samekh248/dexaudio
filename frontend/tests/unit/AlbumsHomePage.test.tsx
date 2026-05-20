@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { AlbumsHomePage } from "@/pages/AlbumsHomePage";
-import * as useAlbumGroupsModule from "@/hooks/use-album-groups";
+import * as homeGroupsModule from "@/hooks/use-library-home-groups";
 
 vi.mock("@/lib/local-storage", () => ({
   getItem: () => "lib-1",
@@ -23,17 +23,57 @@ function renderPage() {
 
 describe("AlbumsHomePage", () => {
   it("renders groups in order and hides empty groups", () => {
-    vi.spyOn(useAlbumGroupsModule, "useAlbumGroups").mockReturnValue({
-      data: {
-        recentlyPlayed: [{ id: "1", title: "Played", artist: "A" }],
-        recentlyAdded: [],
-        hiddenGems: [],
-        randomPicks: [{ id: "2", title: "Random", artist: "B" }],
-        artistSpotlights: [],
+    vi.spyOn(homeGroupsModule, "useLibraryHomeGroups").mockReturnValue({
+      recentlyPlayed: {
+        data: { items: [{ id: "1", title: "Played", artist: "A" }] },
+        isPending: false,
+        isSuccess: true,
+        isFetched: true,
+        isError: false,
+        isFetching: false,
+        refetch: vi.fn(),
       },
-      isLoading: false,
-      error: null,
-    } as unknown as ReturnType<typeof useAlbumGroupsModule.useAlbumGroups>);
+      recentlyAdded: {
+        data: { items: [] },
+        isPending: false,
+        isSuccess: true,
+        isFetched: true,
+        isError: false,
+        isFetching: false,
+        refetch: vi.fn(),
+      },
+      hiddenGems: {
+        data: { items: [] },
+        isPending: false,
+        isSuccess: true,
+        isFetched: true,
+        isError: false,
+        isFetching: false,
+        refetch: vi.fn(),
+      },
+      randomPicks: {
+        data: { items: [{ id: "2", title: "Random", artist: "B" }] },
+        isPending: false,
+        isSuccess: true,
+        isFetched: true,
+        isError: false,
+        isFetching: false,
+        refetch: vi.fn(),
+      },
+      artistSpotlights: {
+        data: { items: [] },
+        isPending: false,
+        isSuccess: true,
+        isFetched: true,
+        isError: false,
+        isFetching: false,
+        refetch: vi.fn(),
+      },
+      anyPending: false,
+      allFetched: true,
+      hasAlbums: true,
+      onlyEmptySuccess: false,
+    } as ReturnType<typeof homeGroupsModule.useLibraryHomeGroups>);
 
     renderPage();
     const headings = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);

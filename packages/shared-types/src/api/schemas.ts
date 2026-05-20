@@ -87,13 +87,32 @@ export const ArtistSpotlightSchema = z.object({
 export type ArtistSpotlight = z.infer<typeof ArtistSpotlightSchema>;
 
 export const AlbumGroupsResponseSchema = z.object({
-  recentlyPlayed: z.array(AlbumSchema).max(5),
-  recentlyAdded: z.array(AlbumSchema).max(5),
-  hiddenGems: z.array(AlbumSchema).max(5),
-  randomPicks: z.array(AlbumSchema).max(5),
-  artistSpotlights: z.array(ArtistSpotlightSchema).max(5),
+  recentlyPlayed: z.array(AlbumSchema).max(10),
+  recentlyAdded: z.array(AlbumSchema).max(10),
+  hiddenGems: z.array(AlbumSchema).max(10),
+  randomPicks: z.array(AlbumSchema).max(10),
+  artistSpotlights: z.array(ArtistSpotlightSchema).max(10),
 });
 export type AlbumGroupsResponse = z.infer<typeof AlbumGroupsResponseSchema>;
+
+export const LibraryGroupKeySchema = z.enum([
+  "recently-played",
+  "recently-added",
+  "hidden-gems",
+  "random-picks",
+  "artist-spotlights",
+]);
+export type LibraryGroupKey = z.infer<typeof LibraryGroupKeySchema>;
+
+export const AlbumGroupResponseSchema = z.object({
+  items: z.array(AlbumSchema),
+});
+export type AlbumGroupResponse = z.infer<typeof AlbumGroupResponseSchema>;
+
+export const ArtistSpotlightGroupResponseSchema = z.object({
+  items: z.array(ArtistSpotlightSchema),
+});
+export type ArtistSpotlightGroupResponse = z.infer<typeof ArtistSpotlightGroupResponseSchema>;
 
 export const AlbumListItemSchema = z.object({
   id: z.string(),

@@ -1,8 +1,11 @@
 import type {
   Album,
+  AlbumGroupResponse,
   AlbumGroupsResponse,
   AlbumPage,
   AllAlbumsResponse,
+  ArtistSpotlightGroupResponse,
+  LibraryGroupKey,
   AppSettings,
   DiscogsCollectionItem,
   MatchStatus,
@@ -78,6 +81,18 @@ export const api = {
 
   getAlbumGroups: (libraryId: string) =>
     request<AlbumGroupsResponse>(`/library/albums/groups?libraryId=${encodeURIComponent(libraryId)}`),
+
+  getAlbumGroup: (libraryId: string, groupKey: LibraryGroupKey, limit = 10) => {
+    const params = new URLSearchParams({
+      libraryId,
+      limit: String(limit),
+    });
+    const path = `/library/albums/groups/${groupKey}?${params}`;
+    if (groupKey === "artist-spotlights") {
+      return request<ArtistSpotlightGroupResponse>(path);
+    }
+    return request<AlbumGroupResponse>(path);
+  },
 
   getAllAlbums: (libraryId: string) =>
     request<AllAlbumsResponse>(`/library/albums/all?libraryId=${encodeURIComponent(libraryId)}`),
