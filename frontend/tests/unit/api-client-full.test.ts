@@ -18,9 +18,20 @@ describe("api client methods", () => {
     await api.getPlexConnection();
     await api.savePlexConnection({ serverUrl: "http://x", token: "t" });
     await api.getLibraries();
+    await api.createPlexPin();
+    await api.getPlexPinStatus(123);
+    await api.getPlexAuthServers();
+    await api.getPlexAuthServerLibraries("machine-1");
+    await api.completePlexAuth({
+      machineIdentifier: "machine-1",
+      libraryIds: ["lib1"],
+    });
+    await api.getPlexAccount();
 
     vi.stubGlobal("fetch", mockFetch({ items: [], total: 0, page: 1 }));
     await api.getAlbums("lib1");
+    await api.getAlbumGroups("lib1");
+    await api.getAllAlbums("lib1");
     await api.getAlbumTracks("a1");
     await api.getArtistAlbums("ar1");
     await api.search("query");
@@ -39,6 +50,8 @@ describe("api client methods", () => {
     await api.saveDiscogsConnection("u", "t");
     await api.syncDiscogs();
     await api.getDiscogsCollection("matched");
+    await api.getDiscogsCollection();
+    await api.patchDiscogsMatch(42, { plexAlbumId: "album-1", status: "matched" });
     await api.submitScrobble({
       track: "T",
       artist: "A",

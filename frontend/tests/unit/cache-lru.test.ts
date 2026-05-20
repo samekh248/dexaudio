@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectEvictionCandidates } from "@/lib/cache-lru";
+import { bytesToGb, selectEvictionCandidates } from "@/lib/cache-lru";
 import type { CacheEntry } from "@/lib/indexed-db";
 
 function entry(key: string, bytes: number, accessed: number): CacheEntry {
@@ -24,6 +24,10 @@ describe("pre-cache LRU eviction", () => {
     const evict = selectEvictionCandidates(entries, 1000);
     expect(evict).toContain("a");
     expect(evict.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("converts bytes to gigabytes", () => {
+    expect(bytesToGb(1024 * 1024 * 1024)).toBe(1);
   });
 
   it("does not evict pinned or permanent entries", () => {
