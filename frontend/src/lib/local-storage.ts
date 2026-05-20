@@ -5,6 +5,8 @@ export const StorageKeys = {
   customPresetId: `${PREFIX}theme.customPresetId`,
   autoQueueSimilar: `${PREFIX}playback.autoQueueSimilar`,
   crossfade: `${PREFIX}playback.crossfade`,
+  /** Client prefs: specs/005-gapless-playback/contracts/playback-preferences.yaml */
+  gaplessPlayback: `${PREFIX}playback.gapless`,
   preCacheLookAhead: `${PREFIX}playback.preCacheLookAhead`,
   preCapGb: `${PREFIX}cache.preCapGb`,
   permanentCapGb: `${PREFIX}cache.permanentCapGb`,
@@ -31,7 +33,15 @@ export function removeItem(key: string): void {
   localStorage.removeItem(key);
 }
 
+export type GaplessPlaybackPreference = {
+  enabled: boolean;
+};
+
 export type ThemeMode = "sync" | "light" | "dark" | "custom";
+
+export function isGaplessPlaybackEnabled(): boolean {
+  return getItem<GaplessPlaybackPreference>(StorageKeys.gaplessPlayback, { enabled: true }).enabled;
+}
 
 export interface CustomThemePreset {
   id: string;

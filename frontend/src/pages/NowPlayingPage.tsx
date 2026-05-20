@@ -7,7 +7,7 @@ import { AudioPlayer } from "@/components/player/AudioPlayer";
 import { PlaybackErrorBanner } from "@/components/player/PlaybackErrorBanner";
 import { QueuePanel } from "@/components/queue/QueuePanel";
 import { prefetchSimilarIfNeeded } from "@/lib/auto-queue";
-import { preCacheUpcoming } from "@/lib/pre-cache-worker";
+import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
 import { isSessionLevelError } from "@/lib/playback-errors";
 import { toast } from "@/components/ui/sonner";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
@@ -35,14 +35,10 @@ export function NowPlayingPage() {
 
   useEffect(() => {
     if (!current) return;
-    void preCacheUpcoming(
-      items.map((i) => i.track),
-      currentIndex,
-    );
     void prefetchSimilarIfNeeded(current, items.length - currentIndex).then((tracks) => {
       if (tracks.length) addAutoTracks(tracks);
     });
-  }, [current?.id, currentIndex, items, addAutoTracks]);
+  }, [current?.id, currentIndex, items.length, addAutoTracks]);
 
   useEffect(() => {
     if (!player.error) {
@@ -179,13 +175,25 @@ export function NowPlayingPage() {
           onPause={player.pause}
           onSeek={player.seek}
           onVolume={player.setVolume}
-          onNext={() => player.fadeOut(() => next())}
+          onNext={() => {
+            const nextTrack = items[currentIndex + 1]?.track;
+            if (isGaplessPlaybackEnabled() && nextTrack && player.tryHandoffForward()) {
+              next();
+              return;
+            }
+            player.fadeOut(() => next());
+          }}
           onPrevious={() => {
             if (currentIndex === 0 && player.playing) {
               player.seek(0);
-            } else {
-              previous();
+              return;
             }
+            const prevTrack = items[currentIndex - 1]?.track;
+            if (isGaplessPlaybackEnabled() && prevTrack && player.tryHandoffBackward()) {
+              previous();
+              return;
+            }
+            previous();
           }}
         />
       </div>
