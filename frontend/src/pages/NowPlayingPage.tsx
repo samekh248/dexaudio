@@ -116,10 +116,10 @@ export function NowPlayingPage() {
   const artSrc = trackArtSrc(current);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] gap-6 lg:grid-cols-2 lg:grid-rows-1 lg:items-stretch">
       <div className="space-y-4">
         {artSrc ? (
-          <AspectRatio ratio={1} className="max-w-xs overflow-hidden rounded-lg bg-muted">
+          <AspectRatio ratio={1} className="w-full overflow-hidden rounded-lg bg-muted">
             <img
               src={artSrc}
               alt=""
