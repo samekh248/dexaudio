@@ -44,6 +44,19 @@ describe("playback queue store", () => {
     expect(usePlaybackQueue.getState().items.every((i) => i.source === "user")).toBe(true);
   });
 
+  it("tracks skipped indices", () => {
+    usePlaybackQueue.getState().markSkipped(2);
+    expect(usePlaybackQueue.getState().skippedIndices.has(2)).toBe(true);
+    usePlaybackQueue.getState().resetSkipped();
+    expect(usePlaybackQueue.getState().skippedIndices.size).toBe(0);
+  });
+
+  it("sets current index directly", () => {
+    usePlaybackQueue.getState().addToQueue([track("1"), track("2"), track("3")]);
+    usePlaybackQueue.getState().setIndex(2);
+    expect(usePlaybackQueue.getState().currentIndex).toBe(2);
+  });
+
   it("clears auto items", () => {
     usePlaybackQueue.setState({
       items: [
