@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import * as spotlightRepo from "../../src/services/plex/artist-spotlight-repo.js";
-import * as libraryService from "../../src/services/plex/library-service.js";
 import type { AlbumWithStats } from "../../src/services/plex/plex-client.js";
 import {
   getEligibleArtistIds,
@@ -117,10 +116,9 @@ describe("album-groups-service selection", () => {
 
 describe("getArtistSpotlights markShown guard", () => {
   it("does not call markShown when limit is 20", async () => {
-    vi.spyOn(libraryService, "getAllAlbumsWithStats").mockResolvedValue([]);
-    vi.spyOn(libraryService, "getAlbumPlayCounts30d").mockResolvedValue(new Map());
+    const targeted = await import("../../src/services/plex/targeted-library-service.js");
+    vi.spyOn(targeted, "loadArtistSpotlightsProfile").mockResolvedValue([]);
     const markShown = vi.spyOn(spotlightRepo, "markShown").mockResolvedValue(undefined);
-    vi.spyOn(spotlightRepo, "selectLeastRecentlyShown").mockResolvedValue([]);
 
     const { getArtistSpotlights } = await import("../../src/services/plex/album-groups-service.js");
     await getArtistSpotlights({} as never, { serverUrl: "http://x", token: "t" }, "lib", 20);

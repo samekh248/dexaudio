@@ -43,6 +43,7 @@ export async function getAlbums(
   return result;
 }
 
+/** Browse All and legacy /groups only; not used by per-group home endpoints. */
 export async function getAllAlbumsWithStats(
   config: PlexConfig,
   libraryId: string,
