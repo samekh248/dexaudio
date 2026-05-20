@@ -1,0 +1,222 @@
+openapi: 3.1.0
+info:
+  title: Dex Audio — Library View Refactor
+  version: 0.1.0
+  description: |
+    Per-group album library endpoints (async home loading) and limit parameter
+    for view-all category pages. Extends 003-albums-library-view contracts.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /library/albums/groups/recently-played:
+    get:
+      operationId: getRecentlyPlayedGroup
+      summary: Recently Played albums for library home or view-all
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list for the group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /library/albums/groups/recently-added:
+    get:
+      operationId: getRecentlyAddedGroup
+      summary: Recently Added albums for library home or view-all
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list for the group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /library/albums/groups/hidden-gems:
+    get:
+      operationId: getHiddenGemsGroup
+      summary: Hidden Gems albums for library home or view-all
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Album list for the group
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /library/albums/groups/random-picks:
+    get:
+      operationId: getRandomPicksGroup
+      summary: Random album picks (reseeded each request)
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Random album list (Browse All tile is client-only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /library/albums/groups/artist-spotlights:
+    get:
+      operationId: getArtistSpotlightsGroup
+      summary: Artist spotlight tiles (round-robin when limit <= 10)
+      description: |
+        When `limit` is 10 or less (home preview), selects artists via
+        least-recently-shown round-robin and updates `artist_spotlight_state`.
+        When `limit` is greater than 10 (view-all), returns up to 20 artists
+        using the same ordering without updating spotlight timestamps.
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Artist spotlight list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtistSpotlightGroupResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /library/albums/groups:
+    get:
+      operationId: getAlbumGroupsLegacy
+      summary: "[Legacy] All groups in one response (limit 10 each)"
+      deprecated: true
+      description: Retained for compatibility; frontend should migrate to per-group endpoints.
+      tags: [library]
+      parameters:
+        - $ref: "#/components/parameters/libraryId"
+      responses:
+        "200":
+          description: All groups (same shape as 003, with up to 10 items per array)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupsResponse"
+
+components:
+  parameters:
+    libraryId:
+      name: libraryId
+      in: query
+      required: true
+      schema: { type: string }
+      description: Plex library section ID
+    limit:
+      name: limit
+      in: query
+      required: false
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 20
+        default: 10
+      description: Max items to return (10 home preview, 20 view-all)
+
+  responses:
+    NotFound:
+      description: No Plex connection or library not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorBody"
+
+  schemas:
+    AlbumGroupResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Album"
+
+    ArtistSpotlightGroupResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtistSpotlight"
+
+    AlbumGroupsResponse:
+      type: object
+      required:
+        - recentlyPlayed
+        - recentlyAdded
+        - hiddenGems
+        - randomPicks
+        - artistSpotlights
+      properties:
+        recentlyPlayed:
+          type: array
+          items: { $ref: "#/components/schemas/Album" }
+        recentlyAdded:
+          type: array
+          items: { $ref: "#/components/schemas/Album" }
+        hiddenGems:
+          type: array
+          items: { $ref: "#/components/schemas/Album" }
+        randomPicks:
+          type: array
+          items: { $ref: "#/components/schemas/Album" }
+        artistSpotlights:
+          type: array
+          items: { $ref: "#/components/schemas/ArtistSpotlight" }
+
+    Album:
+      type: object
+      required: [id, title, artist]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        artist: { type: string }
+        artistId: { type: string }
+        artUrl: { type: string }
+        year: { type: integer }
+
+    ArtistSpotlight:
+      type: object
+      required: [artistId, artistName, albumCount, albumArtUrls]
+      properties:
+        artistId: { type: string }
+        artistName: { type: string }
+        albumCount: { type: integer }
+        albumArtUrls:
+          type: array
+          items: { type: string }
+
+    ErrorBody:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
