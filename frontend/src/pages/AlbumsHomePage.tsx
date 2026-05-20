@@ -1,14 +1,16 @@
-import { useAlbumGroups } from "@/hooks/use-album-groups";
+import type { Album, ArtistSpotlight } from "@dexaudio/shared-types";
 import { getItem, StorageKeys } from "@/lib/local-storage";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlbumGroupRow } from "@/components/albums/AlbumGroupRow";
 import { AlbumCard } from "@/components/albums/AlbumCard";
 import { ArtistSpotlightTile } from "@/components/albums/ArtistSpotlightTile";
 import { BrowseAllTile } from "@/components/albums/BrowseAllTile";
+import { LibraryGroupSection } from "@/components/albums/LibraryGroupSection";
+import { useLibraryHomeGroups } from "@/hooks/use-library-home-groups";
 
 export function AlbumsHomePage() {
   const libraryId = getItem(StorageKeys.activeLibraryId, "");
-  const { data, isLoading, error } = useAlbumGroups(libraryId);
+  const groups = useLibraryHomeGroups(libraryId);
 
   if (!libraryId) {
     return (
@@ -21,37 +23,7 @@ export function AlbumsHomePage() {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="space-y-8" aria-busy="true">
-        {[1, 2, 3].map((n) => (
-          <div key={n} className="h-40 animate-pulse rounded-lg bg-muted" />
-        ))}
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <EmptyState
-        title="Could not load library"
-        description="Plex may be unreachable or your credentials need updating."
-        actionLabel="Check Plex settings"
-        actionTo="/settings"
-      />
-    );
-  }
-
-  if (!data) return null;
-
-  const hasAlbums =
-    data.randomPicks.length > 0 ||
-    data.recentlyPlayed.length > 0 ||
-    data.recentlyAdded.length > 0 ||
-    data.hiddenGems.length > 0 ||
-    data.artistSpotlights.length > 0;
-
-  if (!hasAlbums) {
+  if (groups.onlyEmptySuccess) {
     return (
       <EmptyState
         title="No albums in library"
@@ -62,39 +34,81 @@ export function AlbumsHomePage() {
     );
   }
 
-  const randomEntries = [
-    ...data.randomPicks.map((album) => <AlbumCard key={album.id} album={album} />),
-    <BrowseAllTile key="browse-all" />,
-  ];
-
   return (
     <div>
       <h1 className="mb-6 text-2xl font-bold">Albums</h1>
-      <AlbumGroupRow
+      <LibraryGroupSection
         title="Recently Played"
-        entries={data.recentlyPlayed.map((a) => (
-          <AlbumCard key={a.id} album={a} />
-        ))}
-      />
-      <AlbumGroupRow
+        groupKey="recently-played"
+        query={groups.recentlyPlayed}
+      >
+        {(items) => (
+          <AlbumGroupRow
+            title="Recently Played"
+            entries={(items as Album[]).map((a) => (
+              <AlbumCard key={a.id} album={a} />
+            ))}
+            hideHeading
+          />
+        )}
+      </LibraryGroupSection>
+      <LibraryGroupSection
         title="Recently Added"
-        entries={data.recentlyAdded.map((a) => (
-          <AlbumCard key={a.id} album={a} />
-        ))}
-      />
-      <AlbumGroupRow
-        title="Hidden Gems"
-        entries={data.hiddenGems.map((a) => (
-          <AlbumCard key={a.id} album={a} />
-        ))}
-      />
-      <AlbumGroupRow title="Random Picks" entries={randomEntries} />
-      <AlbumGroupRow
+        groupKey="recently-added"
+        query={groups.recentlyAdded}
+      >
+        {(items) => (
+          <AlbumGroupRow
+            title="Recently Added"
+            entries={(items as Album[]).map((a) => (
+              <AlbumCard key={a.id} album={a} />
+            ))}
+            hideHeading
+          />
+        )}
+      </LibraryGroupSection>
+      <LibraryGroupSection title="Hidden Gems" groupKey="hidden-gems" query={groups.hiddenGems}>
+        {(items) => (
+          <AlbumGroupRow
+            title="Hidden Gems"
+            entries={(items as Album[]).map((a) => (
+              <AlbumCard key={a.id} album={a} />
+            ))}
+            hideHeading
+          />
+        )}
+      </LibraryGroupSection>
+      <LibraryGroupSection
+        title="Random Picks"
+        groupKey="random-picks"
+        query={groups.randomPicks}
+        showViewAll={false}
+      >
+        {(items) => {
+          const randomEntries = [
+            ...(items as Album[]).map((album) => <AlbumCard key={album.id} album={album} />),
+            <BrowseAllTile key="browse-all" />,
+          ];
+          return (
+            <AlbumGroupRow title="Random Picks" entries={randomEntries} hideHeading />
+          );
+        }}
+      </LibraryGroupSection>
+      <LibraryGroupSection
         title="Artist Spotlights"
-        entries={data.artistSpotlights.map((s) => (
-          <ArtistSpotlightTile key={s.artistId} spotlight={s} />
-        ))}
-      />
+        groupKey="artist-spotlights"
+        query={groups.artistSpotlights}
+      >
+        {(items) => (
+          <AlbumGroupRow
+            title="Artist Spotlights"
+            entries={(items as ArtistSpotlight[]).map((s) => (
+              <ArtistSpotlightTile key={s.artistId} spotlight={s} />
+            ))}
+            hideHeading
+          />
+        )}
+      </LibraryGroupSection>
     </div>
   );
 }

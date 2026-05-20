@@ -13,7 +13,7 @@ export function AlbumCard({ album }: AlbumCardProps) {
   const playAlbum = usePlayAlbum();
 
   return (
-    <Card className="group relative w-[140px] shrink-0 overflow-hidden">
+    <Card className="group relative w-[160px] shrink-0 overflow-hidden">
       <div className="relative">
         <AspectRatio ratio={1}>
           {album.artUrl ? (

@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as spotlightRepo from "../../src/services/plex/artist-spotlight-repo.js";
+import * as libraryService from "../../src/services/plex/library-service.js";
 import type { AlbumWithStats } from "../../src/services/plex/plex-client.js";
 import {
   getEligibleArtistIds,
@@ -78,13 +80,25 @@ describe("album-groups-service selection", () => {
     expect(selectHiddenGems(albums, now).map((a) => a.id)).toEqual(["gem"]);
   });
 
-  it("returns up to 5 random distinct albums", () => {
-    const albums = Array.from({ length: 10 }, (_, i) =>
+  it("returns up to limit random distinct albums", () => {
+    const albums = Array.from({ length: 25 }, (_, i) =>
       album({ id: String(i), title: `T${i}`, artist: "A" }),
     );
-    const picks = selectRandomPicks(albums, 5);
-    expect(picks).toHaveLength(5);
-    expect(new Set(picks.map((a) => a.id)).size).toBe(5);
+    const picks = selectRandomPicks(albums, 10);
+    expect(picks).toHaveLength(10);
+    expect(new Set(picks.map((a) => a.id)).size).toBe(10);
+  });
+
+  it("respects limit 20 for recently added", () => {
+    const albums = Array.from({ length: 25 }, (_, i) =>
+      album({
+        id: String(i),
+        title: `T${i}`,
+        artist: "A",
+        addedAt: new Date(2026, 0, i + 1).toISOString(),
+      }),
+    );
+    expect(selectRecentlyAdded(albums, 20)).toHaveLength(20);
   });
 
   it("excludes artists with exactly 2 albums from eligibility", () => {
@@ -98,5 +112,20 @@ describe("album-groups-service selection", () => {
     const eligible = getEligibleArtistIds(albums);
     expect(eligible.has("two")).toBe(false);
     expect(eligible.get("three")?.albums).toHaveLength(3);
+  });
+});
+
+describe("getArtistSpotlights markShown guard", () => {
+  it("does not call markShown when limit is 20", async () => {
+    vi.spyOn(libraryService, "getAllAlbumsWithStats").mockResolvedValue([]);
+    vi.spyOn(libraryService, "getAlbumPlayCounts30d").mockResolvedValue(new Map());
+    const markShown = vi.spyOn(spotlightRepo, "markShown").mockResolvedValue(undefined);
+    vi.spyOn(spotlightRepo, "selectLeastRecentlyShown").mockResolvedValue([]);
+
+    const { getArtistSpotlights } = await import("../../src/services/plex/album-groups-service.js");
+    await getArtistSpotlights({} as never, { serverUrl: "http://x", token: "t" }, "lib", 20);
+
+    expect(markShown).not.toHaveBeenCalled();
+    vi.restoreAllMocks();
   });
 });

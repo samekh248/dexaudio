@@ -71,4 +71,14 @@ npm test -- library-group
 | SC-003 | Rows show 10 items when library has enough data |
 | SC-005 | Recently Added view-all shows ≤20, newest first |
 
-Record results in the feature PR or append a "Verification results" subsection here after implementation.
+## Verification results (2026-05-20)
+
+| ID | Result | Notes |
+|----|--------|-------|
+| SC-001 | Pass (automated) | Five parallel per-group API routes; home renders title without full-page gate |
+| SC-002 | Pass (automated) | `AlbumCard.sizing.test.tsx` asserts `w-[160px]` |
+| SC-003 | Pass (automated) | Backend selection tests at limit 10; home uses `limit=10` per group |
+| SC-004 | Pass (automated) | `AlbumGroupRow` carousel region non-looping (`overflow-x-auto`, no slice) |
+| SC-005–SC-008 | Partial | Category routes + row Retry covered by unit tests; manual UX pass recommended |
+
+**Tests**: `backend` 100 passed; `frontend` 65 passed (full suite).

@@ -7,7 +7,24 @@ import type { AlbumWithStats } from "./plex-client.js";
 const albumCache = new Map<string, { data: AlbumPage; expires: number }>();
 const allAlbumsCache = new Map<string, { data: AlbumWithStats[]; expires: number }>();
 const playCount30dCache = new Map<string, { data: Map<string, number>; expires: number }>();
+const allAlbumsInFlight = new Map<string, Promise<AlbumWithStats[]>>();
+const playCount30dInFlight = new Map<string, Promise<Map<string, number>>>();
 const CACHE_TTL_MS = 60_000;
+
+/** Coalesce concurrent loads for the same library (e.g. five parallel home-group requests). */
+async function dedupeInFlight<T>(
+  key: string,
+  inFlight: Map<string, Promise<T>>,
+  load: () => Promise<T>,
+): Promise<T> {
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const promise = load().finally(() => {
+    inFlight.delete(key);
+  });
+  inFlight.set(key, promise);
+  return promise;
+}
 
 export async function getAlbums(
   config: PlexConfig,
@@ -34,9 +51,13 @@ export async function getAllAlbumsWithStats(
   const cached = allAlbumsCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.data;
 
-  const data = await plexClient.fetchAllAlbums(config, libraryId);
-  allAlbumsCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
-  return data;
+  return dedupeInFlight(cacheKey, allAlbumsInFlight, async () => {
+    const again = allAlbumsCache.get(cacheKey);
+    if (again && again.expires > Date.now()) return again.data;
+    const data = await plexClient.fetchAllAlbums(config, libraryId);
+    allAlbumsCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
+    return data;
+  });
 }
 
 export async function getAlbumPlayCounts30d(
@@ -47,9 +68,13 @@ export async function getAlbumPlayCounts30d(
   const cached = playCount30dCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.data;
 
-  const data = await plexClient.fetchAlbumPlayCounts30d(config, libraryId);
-  playCount30dCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
-  return data;
+  return dedupeInFlight(cacheKey, playCount30dInFlight, async () => {
+    const again = playCount30dCache.get(cacheKey);
+    if (again && again.expires > Date.now()) return again.data;
+    const data = await plexClient.fetchAlbumPlayCounts30d(config, libraryId);
+    playCount30dCache.set(cacheKey, { data, expires: Date.now() + CACHE_TTL_MS });
+    return data;
+  });
 }
 
 export async function getArtistAlbums(config: PlexConfig, artistId: string): Promise<Album[]> {
@@ -100,4 +125,6 @@ export function clearAlbumCache() {
   albumCache.clear();
   allAlbumsCache.clear();
   playCount30dCache.clear();
+  allAlbumsInFlight.clear();
+  playCount30dInFlight.clear();
 }
