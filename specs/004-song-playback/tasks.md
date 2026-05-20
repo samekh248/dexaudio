@@ -20,10 +20,10 @@
 
 **Purpose**: Extend shared types and backend format detection so all three user stories have the data structures they need.
 
-- [ ] T001 [P] Extend `TrackFormatSchema` enum to add `aac`, `ogg`, `wav`, `alac`, `wma` values in `packages/shared-types/src/api/schemas.ts`
-- [ ] T002 [P] Add `PlaybackErrorCategorySchema` enum (`unsupported_format`, `server_unreachable`, `auth_expired`, `track_not_found`, `network_interrupted`, `autoplay_blocked`, `unknown`) in `packages/shared-types/src/api/schemas.ts`
-- [ ] T003 [P] Add `PlaybackAffordanceSchema` enum (`skip`, `retry`, `sign_in`, `back_to_library`, `retry_queue`, `play_gesture`) in `packages/shared-types/src/api/schemas.ts`
-- [ ] T004 Add `PlaybackFailureSchema` object type (category, message, trackTitle?, trackArtist?, trackId?, technicalDetail?, affordances, timestamp) in `packages/shared-types/src/api/schemas.ts`
+- [X] T001 [P] Extend `TrackFormatSchema` enum to add `aac`, `ogg`, `wav`, `alac`, `wma` values in `packages/shared-types/src/api/schemas.ts`
+- [X] T002 [P] Add `PlaybackErrorCategorySchema` enum (`unsupported_format`, `server_unreachable`, `auth_expired`, `track_not_found`, `network_interrupted`, `autoplay_blocked`, `unknown`) in `packages/shared-types/src/api/schemas.ts`
+- [X] T003 [P] Add `PlaybackAffordanceSchema` enum (`skip`, `retry`, `sign_in`, `back_to_library`, `retry_queue`, `play_gesture`) in `packages/shared-types/src/api/schemas.ts`
+- [X] T004 Add `PlaybackFailureSchema` object type (category, message, trackTitle?, trackArtist?, trackId?, technicalDetail?, affordances, timestamp) in `packages/shared-types/src/api/schemas.ts`
 
 **Checkpoint**: Shared types ready. All three user stories can reference these types.
 
@@ -35,10 +35,10 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T005 Expand codec-to-format mapping in `parseTrackFromMetadata` to detect `aac`/`m4a` → `aac`, `ogg`/`opus`/`vorbis` → `ogg`, `wav`/`wave` → `wav`, `alac` → `alac`, `wma`/`wmav2` → `wma` in `backend/src/services/plex/plex-client.ts`
-- [ ] T006 Add `getTranscodeUrl(config: PlexConfig, trackId: string, bitrate?: number): string` function that constructs the Plex universal transcode URL (`/music/:/transcode/universal/start.mp3?path=...&protocol=http&musicBitrate=320`) in `backend/src/services/plex/plex-client.ts`
-- [ ] T007 Add `isBrowserNativeFormat(format: TrackFormat): boolean` helper that returns `true` for `flac`, `mp3`, `aac`, `ogg` in `backend/src/services/plex/plex-client.ts`
-- [ ] T008 Refactor `GET /stream/:trackId` to: (1) fetch track metadata from Plex to determine codec, (2) direct-stream if browser-native, (3) fall back to transcode URL via `getTranscodeUrl` if non-native, (4) return structured `ErrorBody` with appropriate status codes (401 `AUTH_EXPIRED`, 404 `NOT_FOUND`, 415 `UNSUPPORTED_FORMAT`, 502 `BAD_GATEWAY`) per `contracts/openapi.yaml` in `backend/src/api/routes/stream.ts`
+- [X] T005 Expand codec-to-format mapping in `parseTrackFromMetadata` to detect `aac`/`m4a` → `aac`, `ogg`/`opus`/`vorbis` → `ogg`, `wav`/`wave` → `wav`, `alac` → `alac`, `wma`/`wmav2` → `wma` in `backend/src/services/plex/plex-client.ts`
+- [X] T006 Add `getTranscodeUrl(config: PlexConfig, trackId: string, bitrate?: number): string` function that constructs the Plex universal transcode URL (`/music/:/transcode/universal/start.mp3?path=...&protocol=http&musicBitrate=320`) in `backend/src/services/plex/plex-client.ts`
+- [X] T007 Add `isBrowserNativeFormat(format: TrackFormat): boolean` helper that returns `true` for `flac`, `mp3`, `aac`, `ogg` in `backend/src/services/plex/plex-client.ts`
+- [X] T008 Refactor `GET /stream/:trackId` to: (1) fetch track metadata from Plex to determine codec, (2) direct-stream if browser-native, (3) fall back to transcode URL via `getTranscodeUrl` if non-native, (4) return structured `ErrorBody` with appropriate status codes (401 `AUTH_EXPIRED`, 404 `NOT_FOUND`, 415 `UNSUPPORTED_FORMAT`, 502 `BAD_GATEWAY`) per `contracts/openapi.yaml` in `backend/src/api/routes/stream.ts`
 
 **Checkpoint**: Backend streams any format Plex supports. Frontend can consume audio from `/api/v1/stream/:trackId` for all codecs. Error responses are structured.
 
@@ -52,14 +52,14 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add `loading`, `error` state fields and `loadIdRef` (incrementing counter) to `usePlayer` hook; initialize volume from `localStorage` key `dexaudio.volume` (default 1) using existing `getItem` helper in `frontend/src/hooks/use-player.ts`
-- [ ] T010 [US1] Refactor `loadTrack` to: (1) increment `loadIdRef`, (2) capture local `loadId`, (3) call `unload()`, (4) set `loading: true`, (5) check cache, (6) at each async boundary bail out if `loadIdRef.current !== loadId`, (7) create `Howl` with `onloaderror`/`onplayerror` callbacks, (8) call `howl.play()` immediately after creation, (9) set `loading: false` on `onload` in `frontend/src/hooks/use-player.ts`
-- [ ] T011 [US1] Add `AbortController` to `loadTrack` so in-flight fetch to `/api/v1/stream/{trackId}` is cancelled when a new `loadTrack` call supersedes it; abort the previous controller at the start of each `loadTrack` in `frontend/src/hooks/use-player.ts`
-- [ ] T012 [US1] Persist volume to `localStorage` on every `setVolume` call using existing `setItem` helper; pass stored volume to each new `Howl({ volume })` in `frontend/src/hooks/use-player.ts`
-- [ ] T013 [US1] Update `NowPlayingPage` `useEffect` to remove the separate `player.play()` call from the `onEnd` callback (no longer needed since `loadTrack` auto-plays); ensure `onEnd` calls `next()` which triggers the `current?.id` effect to auto-load the next track in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T014 [US1] Handle "Previous" correctly: when `previous()` changes `currentIndex`, the existing `useEffect` on `current?.id` should trigger `loadTrack` for the new track; verify the Previous button wiring calls `previous()` (not just `player.fadeOut`) in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T015 [US1] Handle same-track restart (FR-022): detect when the user clicks play on the already-playing track (same `track.id`) and force `loadTrack` to run by using a restart counter or clearing the howl first, so the `useEffect` dependency fires even when `current?.id` hasn't changed in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T016 [US1] Add cache-corruption fallback (FR-024): in `loadTrack`, if `readFromCache` returns a blob but the Howl's `onloaderror` fires, retry with the live stream URL `/api/v1/stream/{trackId}` before surfacing an error in `frontend/src/hooks/use-player.ts`
+- [X] T009 [US1] Add `loading`, `error` state fields and `loadIdRef` (incrementing counter) to `usePlayer` hook; initialize volume from `localStorage` key `dexaudio.volume` (default 1) using existing `getItem` helper in `frontend/src/hooks/use-player.ts`
+- [X] T010 [US1] Refactor `loadTrack` to: (1) increment `loadIdRef`, (2) capture local `loadId`, (3) call `unload()`, (4) set `loading: true`, (5) check cache, (6) at each async boundary bail out if `loadIdRef.current !== loadId`, (7) create `Howl` with `onloaderror`/`onplayerror` callbacks, (8) call `howl.play()` immediately after creation, (9) set `loading: false` on `onload` in `frontend/src/hooks/use-player.ts`
+- [X] T011 [US1] Add `AbortController` to `loadTrack` so in-flight fetch to `/api/v1/stream/{trackId}` is cancelled when a new `loadTrack` call supersedes it; abort the previous controller at the start of each `loadTrack` in `frontend/src/hooks/use-player.ts`
+- [X] T012 [US1] Persist volume to `localStorage` on every `setVolume` call using existing `setItem` helper; pass stored volume to each new `Howl({ volume })` in `frontend/src/hooks/use-player.ts`
+- [X] T013 [US1] Update `NowPlayingPage` `useEffect` to remove the separate `player.play()` call from the `onEnd` callback (no longer needed since `loadTrack` auto-plays); ensure `onEnd` calls `next()` which triggers the `current?.id` effect to auto-load the next track in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T014 [US1] Handle "Previous" correctly: when `previous()` changes `currentIndex`, the existing `useEffect` on `current?.id` should trigger `loadTrack` for the new track; verify the Previous button wiring calls `previous()` (not just `player.fadeOut`) in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T015 [US1] Handle same-track restart (FR-022): detect when the user clicks play on the already-playing track (same `track.id`) and force `loadTrack` to run by using a restart counter or clearing the howl first, so the `useEffect` dependency fires even when `current?.id` hasn't changed in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T016 [US1] Add cache-corruption fallback (FR-024): in `loadTrack`, if `readFromCache` returns a blob but the Howl's `onloaderror` fires, retry with the live stream URL `/api/v1/stream/{trackId}` before surfacing an error in `frontend/src/hooks/use-player.ts`
 
 **Checkpoint**: Audio plays on click. Tracks auto-advance. No overlapping audio on rapid clicks. Volume persists. Cache fallback works. Same-track restarts.
 
@@ -73,12 +73,12 @@
 
 ### Implementation for User Story 2
 
-- [ ] T017 [P] [US2] Add cover art display to the Now Playing view: render album art from `current.artUrl` (proxied via `/api/v1/plex/photo`) above the track title; use shadcn/ui `AspectRatio` for consistent sizing in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T018 [US2] Update the position polling interval in `usePlayer` from 500 ms to 250 ms for tighter elapsed-time accuracy (SC-006: ±1 s over 10 min); ensure `setPosition` rounds to the nearest millisecond in `frontend/src/hooks/use-player.ts`
-- [ ] T019 [US2] Fix duration reporting: use `onload` to set initial duration from `howl.duration() * 1000`, then update duration again after first play if it differs (some codecs report accurate duration only after decode starts) in `frontend/src/hooks/use-player.ts`
-- [ ] T020 [US2] Ensure play/pause UI state is always synchronized: verify `onplay` sets `playing: true`, `onpause` sets `playing: false`, `onend` sets `playing: false`; add `onstop` callback that also sets `playing: false` in `frontend/src/hooks/use-player.ts`
-- [ ] T021 [US2] Verify seek accuracy: after `howl.seek(ms / 1000)`, immediately update both `position` state and call `updateListenPosition(ms)` so the UI counter and scrobble tracker are in sync in `frontend/src/hooks/use-player.ts`
-- [ ] T022 [US2] Verify queue panel active-track highlighting updates on auto-advance: the `currentIndex` change from `next()` must trigger a re-render of `QueuePanel` with the new `currentIndex` — confirm the prop flow from `usePlaybackQueue` → `NowPlayingPage` → `QueuePanel` in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T017 [P] [US2] Add cover art display to the Now Playing view: render album art from `current.artUrl` (proxied via `/api/v1/plex/photo`) above the track title; use shadcn/ui `AspectRatio` for consistent sizing in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T018 [US2] Update the position polling interval in `usePlayer` from 500 ms to 250 ms for tighter elapsed-time accuracy (SC-006: ±1 s over 10 min); ensure `setPosition` rounds to the nearest millisecond in `frontend/src/hooks/use-player.ts`
+- [X] T019 [US2] Fix duration reporting: use `onload` to set initial duration from `howl.duration() * 1000`, then update duration again after first play if it differs (some codecs report accurate duration only after decode starts) in `frontend/src/hooks/use-player.ts`
+- [X] T020 [US2] Ensure play/pause UI state is always synchronized: verify `onplay` sets `playing: true`, `onpause` sets `playing: false`, `onend` sets `playing: false`; add `onstop` callback that also sets `playing: false` in `frontend/src/hooks/use-player.ts`
+- [X] T021 [US2] Verify seek accuracy: after `howl.seek(ms / 1000)`, immediately update both `position` state and call `updateListenPosition(ms)` so the UI counter and scrobble tracker are in sync in `frontend/src/hooks/use-player.ts`
+- [X] T022 [US2] Verify queue panel active-track highlighting updates on auto-advance: the `currentIndex` change from `next()` must trigger a re-render of `QueuePanel` with the new `currentIndex` — confirm the prop flow from `usePlaybackQueue` → `NowPlayingPage` → `QueuePanel` in `frontend/src/pages/NowPlayingPage.tsx`
 
 **Checkpoint**: All Now Playing view state matches the audio output. Elapsed time, duration, play/pause, queue position, seek, and volume are accurate.
 
@@ -92,18 +92,18 @@
 
 ### Implementation for User Story 3
 
-- [ ] T023 [P] [US3] Create error classification module with `classifyPlaybackError(source: 'api' | 'howler', error: ApiError | number | string, track?: Track): PlaybackFailure` that maps API status codes (401→auth_expired, 404→track_not_found, 415→unsupported_format, 502→server_unreachable) and Howler error codes (2→network_interrupted, 3→unsupported_format, 4→unknown) to `PlaybackFailure` objects with appropriate affordances and user messages in `frontend/src/lib/playback-errors.ts`
-- [ ] T024 [P] [US3] Add `isSessionLevelError(category: PlaybackErrorCategory): boolean` helper that returns `true` for `server_unreachable`, `auth_expired`, `network_interrupted`, `autoplay_blocked` in `frontend/src/lib/playback-errors.ts`
-- [ ] T025 [P] [US3] Add shadcn/ui Sonner toast component if not already present; configure with `position="bottom-right"`, `duration={5000}`, ARIA live region for accessibility in `frontend/src/components/ui/sonner.tsx` and mount `<Toaster />` in `frontend/src/App.tsx`
-- [ ] T026 [P] [US3] Create `PlaybackErrorBanner` component that renders an inline banner in the Now Playing view for session-level errors: shows error message, affected track, affordance buttons (Retry, Sign in, Back to library), and a collapsible "See details" section with `technicalDetail`; uses shadcn/ui `Button` and `Alert`; includes ARIA live region (`role="alert"`) in `frontend/src/components/player/PlaybackErrorBanner.tsx`
-- [ ] T027 [US3] Wire `onloaderror` and `onplayerror` Howler callbacks in `loadTrack` to call `classifyPlaybackError` and set the `error` state on the `usePlayer` hook; add `clearError` function that resets `error` to null in `frontend/src/hooks/use-player.ts`
-- [ ] T028 [US3] Add autoplay detection: in the `onplayerror` callback, check if `Howler.ctx?.state === 'suspended'` or error message matches autoplay patterns; if so, set `autoplayBlocked: true` instead of a normal error; add `resumeAutoplay` function that calls `Howler.ctx?.resume()` then `howl.play()` and clears `autoplayBlocked` in `frontend/src/hooks/use-player.ts`
-- [ ] T029 [US3] Add `skippedIndices: Set<number>` and `markSkipped(index: number)` action to the playback queue store for tracking auto-skipped tracks; add `resetSkipped()` that clears the set (called on `playNow`) in `frontend/src/stores/playback-queue-store.ts`
-- [ ] T030 [US3] Wire error handling into `NowPlayingPage`: (1) on `player.error` change, if individual-track error → show toast via Sonner with track title/artist/reason, call `markSkipped(currentIndex)`, call `next()` to auto-skip; (2) if session-level error → render `PlaybackErrorBanner` with affordance handlers (retry → re-call `loadTrack`, sign_in → navigate to `/settings`, back_to_library → navigate to `/`); (3) if `autoplayBlocked` → render a prominent "Play" button that calls `player.resumeAutoplay()` in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T031 [US3] Implement all-failed-queue terminal state (FR-017): after `next()` is called from auto-skip, check if `skippedIndices.size >= items.length` (all items skipped or failing); if so, display terminal message "No queued tracks could be played" with "Back to library" and "Retry queue" affordances instead of auto-advancing in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T032 [US3] Implement error dismissal (FR-019): when a successful play action occurs (new track loads and plays), automatically clear any visible error state (`player.clearError()`); when user clicks dismiss on a toast or banner, clear the error in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T033 [US3] Add mid-stream error recovery (R-007): in `onloaderror`, if `position > 0` (playback had started), attempt one retry by calling `loadTrack` again with the same track; if the retry also fails, surface the error; for cache failures, fall back to live stream before surfacing the error in `frontend/src/hooks/use-player.ts`
-- [ ] T034 [US3] Add error logging (FR-025): on every `PlaybackFailure` creation, call `console.error` with a structured log containing category, trackId, technicalDetail, and timestamp so operators can investigate in `frontend/src/lib/playback-errors.ts`
+- [X] T023 [P] [US3] Create error classification module with `classifyPlaybackError(source: 'api' | 'howler', error: ApiError | number | string, track?: Track): PlaybackFailure` that maps API status codes (401→auth_expired, 404→track_not_found, 415→unsupported_format, 502→server_unreachable) and Howler error codes (2→network_interrupted, 3→unsupported_format, 4→unknown) to `PlaybackFailure` objects with appropriate affordances and user messages in `frontend/src/lib/playback-errors.ts`
+- [X] T024 [P] [US3] Add `isSessionLevelError(category: PlaybackErrorCategory): boolean` helper that returns `true` for `server_unreachable`, `auth_expired`, `network_interrupted`, `autoplay_blocked` in `frontend/src/lib/playback-errors.ts`
+- [X] T025 [P] [US3] Add shadcn/ui Sonner toast component if not already present; configure with `position="bottom-right"`, `duration={5000}`, ARIA live region for accessibility in `frontend/src/components/ui/sonner.tsx` and mount `<Toaster />` in `frontend/src/App.tsx`
+- [X] T026 [P] [US3] Create `PlaybackErrorBanner` component that renders an inline banner in the Now Playing view for session-level errors: shows error message, affected track, affordance buttons (Retry, Sign in, Back to library), and a collapsible "See details" section with `technicalDetail`; uses shadcn/ui `Button` and `Alert`; includes ARIA live region (`role="alert"`) in `frontend/src/components/player/PlaybackErrorBanner.tsx`
+- [X] T027 [US3] Wire `onloaderror` and `onplayerror` Howler callbacks in `loadTrack` to call `classifyPlaybackError` and set the `error` state on the `usePlayer` hook; add `clearError` function that resets `error` to null in `frontend/src/hooks/use-player.ts`
+- [X] T028 [US3] Add autoplay detection: in the `onplayerror` callback, check if `Howler.ctx?.state === 'suspended'` or error message matches autoplay patterns; if so, set `autoplayBlocked: true` instead of a normal error; add `resumeAutoplay` function that calls `Howler.ctx?.resume()` then `howl.play()` and clears `autoplayBlocked` in `frontend/src/hooks/use-player.ts`
+- [X] T029 [US3] Add `skippedIndices: Set<number>` and `markSkipped(index: number)` action to the playback queue store for tracking auto-skipped tracks; add `resetSkipped()` that clears the set (called on `playNow`) in `frontend/src/stores/playback-queue-store.ts`
+- [X] T030 [US3] Wire error handling into `NowPlayingPage`: (1) on `player.error` change, if individual-track error → show toast via Sonner with track title/artist/reason, call `markSkipped(currentIndex)`, call `next()` to auto-skip; (2) if session-level error → render `PlaybackErrorBanner` with affordance handlers (retry → re-call `loadTrack`, sign_in → navigate to `/settings`, back_to_library → navigate to `/`); (3) if `autoplayBlocked` → render a prominent "Play" button that calls `player.resumeAutoplay()` in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T031 [US3] Implement all-failed-queue terminal state (FR-017): after `next()` is called from auto-skip, check if `skippedIndices.size >= items.length` (all items skipped or failing); if so, display terminal message "No queued tracks could be played" with "Back to library" and "Retry queue" affordances instead of auto-advancing in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T032 [US3] Implement error dismissal (FR-019): when a successful play action occurs (new track loads and plays), automatically clear any visible error state (`player.clearError()`); when user clicks dismiss on a toast or banner, clear the error in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T033 [US3] Add mid-stream error recovery (R-007): in `onloaderror`, if `position > 0` (playback had started), attempt one retry by calling `loadTrack` again with the same track; if the retry also fails, surface the error; for cache failures, fall back to live stream before surfacing the error in `frontend/src/hooks/use-player.ts`
+- [X] T034 [US3] Add error logging (FR-025): on every `PlaybackFailure` creation, call `console.error` with a structured log containing category, trackId, technicalDetail, and timestamp so operators can investigate in `frontend/src/lib/playback-errors.ts`
 
 **Checkpoint**: Every failure type produces a visible, actionable message. Individual tracks auto-skip with toast. Session errors show blocking banner. Autoplay block shows Play button. All-failed queue shows terminal message.
 
@@ -113,10 +113,10 @@
 
 **Purpose**: Edge cases, accessibility, and verification across all stories.
 
-- [ ] T035 [P] Add `aria-live="polite"` to the elapsed-time counter and `aria-live="assertive"` to the error banner in `frontend/src/components/player/AudioPlayer.tsx` and `frontend/src/components/player/PlaybackErrorBanner.tsx`
-- [ ] T036 [P] Ensure the "Retry queue" affordance resets `skippedIndices`, sets `currentIndex` to 0, and triggers `loadTrack` for the first item in `frontend/src/pages/NowPlayingPage.tsx`
-- [ ] T037 Verify responsive layout of error banner and autoplay-blocked overlay at 320 px viewport width; adjust Tailwind classes if needed in `frontend/src/components/player/PlaybackErrorBanner.tsx`
-- [ ] T038 Run manual smoke test per `quickstart.md`: play album → audio starts → track auto-advances → next/previous work → error banner on disconnected server → toast on unsupported track
+- [X] T035 [P] Add `aria-live="polite"` to the elapsed-time counter and `aria-live="assertive"` to the error banner in `frontend/src/components/player/AudioPlayer.tsx` and `frontend/src/components/player/PlaybackErrorBanner.tsx`
+- [X] T036 [P] Ensure the "Retry queue" affordance resets `skippedIndices`, sets `currentIndex` to 0, and triggers `loadTrack` for the first item in `frontend/src/pages/NowPlayingPage.tsx`
+- [X] T037 Verify responsive layout of error banner and autoplay-blocked overlay at 320 px viewport width; adjust Tailwind classes if needed in `frontend/src/components/player/PlaybackErrorBanner.tsx`
+- [X] T038 Run manual smoke test per `quickstart.md`: play album → audio starts → track auto-advances → next/previous work → error banner on disconnected server → toast on unsupported track
 
 ---
 

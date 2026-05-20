@@ -7,8 +7,50 @@ export const ErrorBodySchema = z.object({
 });
 export type ErrorBody = z.infer<typeof ErrorBodySchema>;
 
-export const TrackFormatSchema = z.enum(["flac", "mp3", "unsupported"]);
+export const TrackFormatSchema = z.enum([
+  "flac",
+  "mp3",
+  "aac",
+  "ogg",
+  "wav",
+  "alac",
+  "wma",
+  "unsupported",
+]);
 export type TrackFormat = z.infer<typeof TrackFormatSchema>;
+
+export const PlaybackErrorCategorySchema = z.enum([
+  "unsupported_format",
+  "server_unreachable",
+  "auth_expired",
+  "track_not_found",
+  "network_interrupted",
+  "autoplay_blocked",
+  "unknown",
+]);
+export type PlaybackErrorCategory = z.infer<typeof PlaybackErrorCategorySchema>;
+
+export const PlaybackAffordanceSchema = z.enum([
+  "skip",
+  "retry",
+  "sign_in",
+  "back_to_library",
+  "retry_queue",
+  "play_gesture",
+]);
+export type PlaybackAffordance = z.infer<typeof PlaybackAffordanceSchema>;
+
+export const PlaybackFailureSchema = z.object({
+  category: PlaybackErrorCategorySchema,
+  message: z.string(),
+  trackTitle: z.string().optional(),
+  trackArtist: z.string().optional(),
+  trackId: z.string().optional(),
+  technicalDetail: z.string().optional(),
+  affordances: z.array(PlaybackAffordanceSchema).min(1),
+  timestamp: z.string().datetime(),
+});
+export type PlaybackFailure = z.infer<typeof PlaybackFailureSchema>;
 
 export const TrackSchema = z.object({
   id: z.string(),

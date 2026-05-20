@@ -1,8 +1,7 @@
 import { useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import type { Album } from "@dexaudio/shared-types";
 import { api } from "@/services/api-client";
-import { usePlaybackQueue } from "@/stores/playback-queue-store";
+import { usePlayNow } from "@/hooks/use-play-now";
 
 function sortArtistAlbums(albums: Album[]): Album[] {
   return [...albums].sort((a, b) => {
@@ -16,8 +15,7 @@ function sortArtistAlbums(albums: Album[]): Album[] {
 }
 
 export function usePlayArtist() {
-  const navigate = useNavigate();
-  const playNow = usePlaybackQueue((s) => s.playNow);
+  const playNow = usePlayNow();
 
   return useCallback(
     async (artistId: string) => {
@@ -26,8 +24,7 @@ export function usePlayArtist() {
       const tracks = trackLists.flat();
       if (tracks.length === 0) return;
       playNow(tracks);
-      navigate("/now-playing");
     },
-    [navigate, playNow],
+    [playNow],
   );
 }

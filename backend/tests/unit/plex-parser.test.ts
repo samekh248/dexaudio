@@ -9,6 +9,8 @@ import {
   parseAlbumPageXml,
   parseLibrariesXml,
   parseTrackFromMetadata,
+  parseTrackMetadataXml,
+  resolveTrackArtPath,
   validateConnection,
 } from "../../src/services/plex/plex-client.js";
 import { ValidationError } from "../../src/lib/errors.js";
@@ -25,6 +27,24 @@ describe("plex-parser", () => {
     expect(libs[0]).toEqual({ id: "1", title: "Music", type: "artist" });
   });
 
+  it("resolves track art from parent album when thumb is absent", () => {
+    expect(
+      resolveTrackArtPath({ parentRatingKey: "50", ratingKey: "99" }),
+    ).toBe("/library/metadata/50/thumb");
+  });
+
+  it("resolves track art from absolute thumb path", () => {
+    expect(resolveTrackArtPath({ thumb: "/library/metadata/50/thumb/1" })).toBe(
+      "/library/metadata/50/thumb/1",
+    );
+  });
+
+  it("reads codec from nested Media element", () => {
+    const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="1000"><Media codec="flac"/></Track></MediaContainer>`;
+    const track = parseTrackMetadataXml(xml);
+    expect(track?.format).toBe("flac");
+  });
+
   it("parses track metadata with format", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "100",
@@ -38,11 +58,21 @@ describe("plex-parser", () => {
     expect(track.durationMs).toBe(180000);
   });
 
-  it("marks unsupported codecs", () => {
+  it("detects aac codec", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "1",
       title: "X",
       codec: "aac",
+      duration: "1000",
+    });
+    expect(track.format).toBe("aac");
+  });
+
+  it("marks unsupported codecs", () => {
+    const track = parseTrackFromMetadata({
+      ratingKey: "1",
+      title: "X",
+      codec: "ape",
       duration: "1000",
     });
     expect(track.format).toBe("unsupported");
@@ -113,10 +143,11 @@ describe("plex-parser", () => {
     const track = parseTrackFromMetadata({
       ratingKey: "2",
       title: "S",
+      parentRatingKey: "50",
       thumb: "/thumb",
       viewCount: "3",
     });
-    expect(track.artUrl).toBeDefined();
+    expect(track.artUrl).toBe("/thumb");
     expect(track.playCount).toBe(3);
   });
 

@@ -1,9 +1,35 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { AppError, NotFoundError } from "../../lib/errors.js";
+import { AppError, BadGatewayError, NotFoundError } from "../../lib/errors.js";
 import * as plexConn from "../../services/plex/plex-connection-service.js";
-import * as libraryService from "../../services/plex/library-service.js";
-import { getStreamUrl } from "../../services/plex/plex-client.js";
+import type { PlexConfig } from "../../services/plex/plex-client.js";
+import {
+  fetchTrackMetadata,
+  getStreamUrl,
+  getTranscodeUrl,
+  isBrowserNativeFormat,
+  plexMediaHeaders,
+} from "../../services/plex/plex-client.js";
+
+function isPlayableContentType(contentType: string): boolean {
+  if (!contentType) return true;
+  const ct = contentType.toLowerCase();
+  if (ct.includes("video") || ct.includes("text/html")) return false;
+  if (ct.includes("json") || ct.includes("xml")) return false;
+  if (ct.includes("mpegurl") || ct.includes("dash")) return false;
+  return ct.includes("audio") || ct.includes("octet-stream") || ct.includes("mpeg");
+}
+
+async function proxyStream(
+  config: PlexConfig,
+  streamUrl: string,
+): Promise<{ ok: true; body: ReadableStream<Uint8Array> | null; contentType: string } | { ok: false; status: number }> {
+  const res = await fetch(streamUrl, { headers: plexMediaHeaders(config.token) });
+  if (!res.ok) return { ok: false, status: res.status };
+  const ct = res.headers.get("content-type") ?? "audio/mpeg";
+  if (!isPlayableContentType(ct)) return { ok: false, status: 415 };
+  return { ok: true, body: res.body, contentType: ct };
+}
 
 export async function streamRoutes(app: FastifyInstance) {
   app.get("/plex/photo", async (request, reply) => {
@@ -27,32 +53,53 @@ export async function streamRoutes(app: FastifyInstance) {
     const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
     if (!config) throw new NotFoundError("Plex not connected");
 
-    // Find track format via album search is expensive; stream proxy validates on Plex side
-    const streamUrl = getStreamUrl(config, trackId);
-    const head = await fetch(streamUrl, { method: "HEAD" });
-    if (head.status === 415) {
-      throw new AppError("Unsupported audio format", 415, "UNSUPPORTED_FORMAT", "Play FLAC or MP3 only");
-    }
-    if (!head.ok && head.status !== 405) {
-      throw new NotFoundError("Track not found");
+    let track;
+    try {
+      track = await fetchTrackMetadata(config, trackId);
+    } catch {
+      throw new BadGatewayError(
+        "Could not reach Plex server",
+        "Check that your Plex server is running and reachable",
+      );
     }
 
-    const contentType = head.headers.get("content-type") ?? "";
-    if (contentType && !contentType.includes("audio") && !contentType.includes("octet-stream")) {
-      if (contentType.includes("json") || contentType.includes("xml")) {
-        // Plex may return redirect - proxy full GET
+    const streamUrls: string[] = [];
+    if (!track || !isBrowserNativeFormat(track.format)) {
+      streamUrls.push(getTranscodeUrl(config, trackId));
+      streamUrls.push(getStreamUrl(config, trackId));
+    } else {
+      streamUrls.push(getStreamUrl(config, trackId));
+      streamUrls.push(getTranscodeUrl(config, trackId));
+    }
+
+    for (const streamUrl of streamUrls) {
+      const result = await proxyStream(config, streamUrl);
+      if (!result.ok) {
+        if (result.status === 401) {
+          throw new AppError(
+            "Plex authentication expired",
+            401,
+            "AUTH_EXPIRED",
+            "Re-authenticate with your Plex account",
+          );
+        }
+        if (result.status === 404) {
+          throw new NotFoundError("Track not found");
+        }
+        continue;
       }
+      reply.header("content-type", result.contentType);
+      reply.header("accept-ranges", "bytes");
+      reply.header("cache-control", "no-store");
+      return reply.send(result.body);
     }
 
-    const stream = await fetch(streamUrl);
-    if (!stream.ok) throw new NotFoundError("Track not found");
-
-    const ct = stream.headers.get("content-type") ?? "audio/mpeg";
-    if (ct.includes("video") || ct.includes("text/html")) {
-      throw new AppError("Unsupported audio format", 415, "UNSUPPORTED_FORMAT");
-    }
-
-    reply.header("content-type", ct);
-    return reply.send(stream.body);
+    const formatLabel = track?.format ?? "unknown";
+    throw new AppError(
+      `Unsupported audio format (${formatLabel})`,
+      415,
+      "UNSUPPORTED_FORMAT",
+      "This format cannot be played. Skip this track.",
+    );
   });
 }
