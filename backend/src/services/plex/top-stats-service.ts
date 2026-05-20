@@ -1,5 +1,11 @@
 import type { TopStats } from "@dexaudio/shared-types";
+import { decodeXmlEntities } from "../../lib/xml-entities.js";
 import type { PlexConfig } from "./plex-client.js";
+
+function plexText(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  return decodeXmlEntities(value);
+}
 
 export async function aggregateTopStats(config: PlexConfig): Promise<TopStats> {
   const base = config.serverUrl.replace(/\/$/, "");
@@ -23,9 +29,9 @@ export function parseTopStatsXml(xml: string): TopStats {
     songs.push({
       track: {
         id: attrs.ratingKey ?? "",
-        title: attrs.title ?? "Unknown",
-        artist: attrs.grandparentTitle ?? "Unknown",
-        album: attrs.parentTitle ?? "Unknown",
+        title: plexText(attrs.title, "Unknown"),
+        artist: plexText(attrs.grandparentTitle, "Unknown"),
+        album: plexText(attrs.parentTitle, "Unknown"),
         durationMs: Number(attrs.duration ?? 0),
         format: "mp3",
         playCount,
@@ -59,6 +65,6 @@ function parseAttrs(s: string): Record<string, string> {
   const attrs: Record<string, string> = {};
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(s)) !== null) attrs[m[1]] = m[2];
+  while ((m = re.exec(s)) !== null) attrs[m[1]] = decodeXmlEntities(m[2]);
   return attrs;
 }

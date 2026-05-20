@@ -1,4 +1,5 @@
 import { ValidationError } from "../../lib/errors.js";
+import { decodeXmlEntities } from "../../lib/xml-entities.js";
 import { PLEX_CLIENT_ID, PLEX_PRODUCT_NAME } from "../../lib/config.js";
 import type { Album, PlexLibrary, Track, TrackFormat } from "@dexaudio/shared-types";
 
@@ -84,7 +85,7 @@ function parseDirAttrs(attrString: string): Record<string, string> {
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrString)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = decodeXmlEntities(m[2]);
   }
   return attrs;
 }
@@ -113,14 +114,19 @@ function codecToFormat(codec: string): TrackFormat {
   return "unsupported";
 }
 
+function plexText(value: string | undefined, fallback: string): string {
+  if (!value) return fallback;
+  return decodeXmlEntities(value);
+}
+
 export function parseTrackFromMetadata(attrs: Record<string, string>): Track {
   const format = codecToFormat(attrs.codec ?? "");
 
   return {
     id: attrs.ratingKey ?? attrs.key ?? "",
-    title: attrs.title ?? "Unknown",
-    artist: attrs.grandparentTitle ?? attrs.originalTitle ?? "Unknown Artist",
-    album: attrs.parentTitle ?? "Unknown Album",
+    title: plexText(attrs.title, "Unknown"),
+    artist: plexText(attrs.grandparentTitle ?? attrs.originalTitle, "Unknown Artist"),
+    album: plexText(attrs.parentTitle, "Unknown Album"),
     albumId: attrs.parentRatingKey,
     durationMs: Number(attrs.duration ?? 0),
     format,
@@ -147,8 +153,8 @@ export function parseAlbumFromMetadata(attrs: Record<string, string>): AlbumWith
 
   return {
     id: attrs.ratingKey ?? attrs.key ?? "",
-    title: attrs.title ?? "Unknown",
-    artist: attrs.parentTitle ?? attrs.grandparentTitle ?? "Unknown Artist",
+    title: plexText(attrs.title, "Unknown"),
+    artist: plexText(attrs.parentTitle ?? attrs.grandparentTitle, "Unknown Artist"),
     artistId: attrs.parentRatingKey ?? attrs.grandparentRatingKey,
     year: attrs.year ? Number(attrs.year) : undefined,
     artUrl: attrs.thumb,
@@ -391,7 +397,7 @@ function parseAttrs(attrString: string): Record<string, string> {
   const re = /(\w+)="([^"]*)"/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(attrString)) !== null) {
-    attrs[m[1]] = m[2];
+    attrs[m[1]] = decodeXmlEntities(m[2]);
   }
   return attrs;
 }
