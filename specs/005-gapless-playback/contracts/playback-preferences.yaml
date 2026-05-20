@@ -1,0 +1,80 @@
+# Client playback preferences contract (feature 005)
+# No REST API changes — documents localStorage keys and invariants
+# shared with the frontend implementation.
+
+openapi: 3.1.0
+info:
+  title: Dexaudio — Gapless Playback (Client Preferences)
+  version: 0.5.0
+  description: >
+    Feature 005 introduces no new `/api/v1/*` endpoints. Stream behavior
+    remains as defined in feature 004. This contract documents client-side
+    playback preference storage and mutual exclusion rules.
+
+components:
+  schemas:
+    GaplessPlaybackPreference:
+      type: object
+      required: [enabled]
+      properties:
+        enabled:
+          type: boolean
+          default: false
+          description: When true, enables bidirectional pre-cache and staged Howl handoffs.
+
+    CrossfadePreference:
+      type: object
+      required: [enabled, durationSec]
+      properties:
+        enabled:
+          type: boolean
+          default: false
+        durationSec:
+          type: number
+          minimum: 0
+          maximum: 12
+          default: 3
+
+    PlaybackPreferences:
+      type: object
+      description: Aggregate persisted in localStorage (not synced to server).
+      properties:
+        gapless:
+          $ref: '#/components/schemas/GaplessPlaybackPreference'
+        crossfade:
+          $ref: '#/components/schemas/CrossfadePreference'
+        preCacheLookAhead:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 3
+          description: >
+            User-configured forward look-ahead count. When gapless.enabled is true,
+            effective forward depth is max(preCacheLookAhead, 2).
+
+    GaplessCachePrioritySlot:
+      type: object
+      description: Logical neighbor slot ordering when gapless is enabled.
+      properties:
+        priority:
+          type: integer
+          enum: [1, 2, 3, 4]
+          description: "1=next, 2=previous, 3=second-ahead, 4=two-behind"
+        queueIndex:
+          type: integer
+          minimum: 0
+
+  x-localStorageKeys:
+    gaplessPlayback: dexaudio.playback.gapless
+    crossfade: dexaudio.playback.crossfade
+    preCacheLookAhead: dexaudio.playback.preCacheLookAhead
+
+  x-invariants:
+    - name: gapless_crossfade_mutex
+      rule: "NOT (gapless.enabled AND crossfade.enabled)"
+    - name: gapless_forward_depth
+      rule: "IF gapless.enabled THEN effectiveLookAhead >= 2"
+    - name: pinned_cache_protected
+      rule: "permanent/pinned cache entries MUST NOT be evicted for gapless slots"
+
+paths: {}
