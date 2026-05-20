@@ -1,5 +1,10 @@
 import type { getDb } from "../../db/index.js";
-import { collectionMatches, discogsReleases, scrobbleOutbox } from "../../db/schema.js";
+import {
+  artistSpotlightState,
+  collectionMatches,
+  discogsReleases,
+  scrobbleOutbox,
+} from "../../db/schema.js";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -8,4 +13,5 @@ export async function wipeLocalData(db: Db): Promise<void> {
   await db.delete(collectionMatches);
   await db.delete(discogsReleases);
   await db.delete(scrobbleOutbox);
+  await db.delete(artistSpotlightState);
 }

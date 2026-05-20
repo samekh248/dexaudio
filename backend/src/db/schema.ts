@@ -98,3 +98,8 @@ export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
 });
+
+export const artistSpotlightState = pgTable("artist_spotlight_state", {
+  artistId: text("artist_id").primaryKey(),
+  lastSpotlightedAt: timestamp("last_spotlighted_at", { withTimezone: true }).notNull(),
+});

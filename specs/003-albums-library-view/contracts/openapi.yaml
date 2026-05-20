@@ -1,0 +1,235 @@
+openapi: 3.1.0
+info:
+  title: Dex Audio — Albums Library View
+  version: 0.1.0
+  description: |
+    New REST endpoints for the grouped albums "home" and the alphabetical
+    Browse All view. Extends the existing `/api/v1/library/*` surface.
+
+servers:
+  - url: /api/v1
+
+paths:
+  /library/albums/groups:
+    get:
+      operationId: getAlbumGroups
+      summary: Get curated album groups for the albums home view
+      description: |
+        Returns the five curated groups (Recently Played, Recently Added,
+        Hidden Gems, Random Picks, Artist Spotlights) for the active Plex
+        library in a single response. Each group contains up to 5 entries;
+        empty groups are returned as empty arrays (the frontend hides them).
+
+        The Artist Spotlights selection uses least-recently-shown round-robin
+        and updates each chosen artist's timestamp in `artist_spotlight_state`
+        as a side effect of this request.
+
+        Random Picks is reseeded on every request so the set changes when the
+        view is re-entered (FR-009 / FR-028).
+      tags: [library]
+      parameters:
+        - name: libraryId
+          in: query
+          required: true
+          schema: { type: string }
+          description: Plex library section ID
+      responses:
+        "200":
+          description: Groups assembled successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlbumGroupsResponse"
+        "404":
+          description: No Plex connection or library not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+  /library/albums/all:
+    get:
+      operationId: getAllAlbums
+      summary: Get every album in the library in alphabetical order
+      description: |
+        Returns the full list of albums in the active Plex library, sorted
+        alphabetically by title with "The "-aware sort applied
+        (FR-024 / FR-025). The frontend renders this list virtualized via
+        `content-visibility: auto` for libraries up to ~50 k albums.
+
+        Each item is a lighter-weight `AlbumListItem` to keep the payload
+        manageable on very large libraries. `sortKey` is the pre-computed
+        sort key with "The " stripped where applicable; clients may use it
+        for jump-to-letter or incremental filter without recomputing.
+      tags: [library]
+      parameters:
+        - name: libraryId
+          in: query
+          required: true
+          schema: { type: string }
+          description: Plex library section ID
+      responses:
+        "200":
+          description: Full album list returned in sorted order
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+              example: "private, max-age=60, stale-while-revalidate=600"
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AlbumListItem"
+                  total:
+                    type: integer
+                    minimum: 0
+        "404":
+          description: No Plex connection or library not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorBody"
+
+components:
+  schemas:
+    AlbumGroupsResponse:
+      type: object
+      required:
+        - recentlyPlayed
+        - recentlyAdded
+        - hiddenGems
+        - randomPicks
+        - artistSpotlights
+      properties:
+        recentlyPlayed:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Album"
+          description: |
+            Up to 5 albums with the highest play count in the trailing
+            30 days, ordered by play count desc (ties broken by most-recent
+            scrobble). May be empty.
+        recentlyAdded:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Album"
+          description: |
+            Up to 5 most recently added albums, ordered by added-date desc.
+            May be empty.
+        hiddenGems:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Album"
+          description: |
+            Up to 5 albums with user rating ≥6 (≥3 stars) that have not been
+            scrobbled within the trailing 90 days. Ordered by rating desc
+            then by least-recent scrobble first. May be empty.
+        randomPicks:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/Album"
+          description: |
+            5 albums chosen uniformly at random from the library. Reseeded
+            on every request. May be empty only if the library has zero
+            albums.
+        artistSpotlights:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/ArtistSpotlight"
+          description: |
+            Up to 5 artist tiles selected by least-recently-shown
+            round-robin from artists with >2 albums in the library. Each
+            chosen artist's `last_spotlighted_at` is updated as a side
+            effect of this request.
+
+    Album:
+      type: object
+      required: [id, title, artist]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        year:
+          type: integer
+        artUrl:
+          type: string
+        playCount:
+          type: integer
+          minimum: 0
+        userRating:
+          type: integer
+          minimum: 0
+          maximum: 10
+          description: Plex user rating (0–10 scale). 3 stars = 6.
+        addedAt:
+          type: string
+          format: date-time
+          description: When the album was added to the Plex library.
+        pinned:
+          type: boolean
+
+    ArtistSpotlight:
+      type: object
+      required: [artistId, artistName, albumCount, albumArtUrls]
+      properties:
+        artistId:
+          type: string
+          description: Plex artist ratingKey (stable identifier).
+        artistName:
+          type: string
+        albumCount:
+          type: integer
+          minimum: 3
+          description: Always > 2 (eligibility rule). Useful for "N albums" UI affordance.
+        albumArtUrls:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+          description: |
+            Up to 3 album cover URLs for the stacked-album visual, ordered
+            oldest album first.
+
+    AlbumListItem:
+      type: object
+      required: [id, title, artist, sortKey]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        artUrl:
+          type: string
+        sortKey:
+          type: string
+          description: |
+            Pre-computed lowercase sort key with leading "The " stripped
+            where applicable (FR-024/025). Clients may use this for
+            jump-to-letter or filter logic.
+
+    ErrorBody:
+      type: object
+      required: [message]
+      properties:
+        message:
+          type: string
+        code:
+          type: string
+        action:
+          type: string

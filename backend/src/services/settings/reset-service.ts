@@ -6,6 +6,7 @@ import {
   discogsAccounts,
   discogsReleases,
   lastfmAccounts,
+  artistSpotlightState,
   plexConnections,
   scrobbleOutbox,
 } from "../../db/schema.js";
@@ -16,7 +17,10 @@ export type ResetTarget = "plex" | "discogs" | "lastfm" | "collection" | "cache"
 
 export async function resetTargets(db: Db, targets: ResetTarget[]) {
   const all = targets.includes("all");
-  if (all || targets.includes("plex")) await db.delete(plexConnections);
+  if (all || targets.includes("plex")) {
+    await db.delete(artistSpotlightState);
+    await db.delete(plexConnections);
+  }
   if (all || targets.includes("discogs")) {
     await db.delete(discogsAccounts);
     await db.delete(discogsReleases);

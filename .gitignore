@@ -13,3 +13,6 @@ Thumbs.db
 .idea/
 coverage/
 *.tsbuildinfo
+frontend/.vite/
+dist/
+build/
