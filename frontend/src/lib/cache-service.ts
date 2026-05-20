@@ -7,6 +7,25 @@ import {
 import { selectEvictionCandidates } from "./cache-lru.js";
 import { getItem, StorageKeys } from "./local-storage.js";
 
+export async function ensurePreCacheSpace(
+  neededBytes: number,
+  protectedKeys: ReadonlySet<string>,
+): Promise<void> {
+  const capGb = getItem(StorageKeys.preCapGb, 2);
+  const capBytes = capGb * 1024 * 1024 * 1024;
+  const entries = await getAllCacheEntries();
+  const preTotal = entries
+    .filter((e) => e.cache_kind === "pre-cache" && !e.pinned)
+    .reduce((sum, e) => sum + e.byte_size, 0);
+
+  if (preTotal + neededBytes <= capBytes) return;
+
+  const toEvict = selectEvictionCandidates(entries, capBytes - neededBytes, protectedKeys);
+  for (const key of toEvict) {
+    await deleteCacheEntry(key);
+  }
+}
+
 export async function readFromCache(trackKey: string): Promise<Blob | null> {
   const entry = await getCacheEntry(trackKey);
   if (!entry) return null;
@@ -21,15 +40,10 @@ export async function writeToCache(
   versionSignal: string,
   kind: "pre-cache" | "permanent",
   pinned = false,
+  protectedKeys: ReadonlySet<string> = new Set(),
 ): Promise<void> {
-  const capGb = kind === "pre-cache"
-    ? getItem(StorageKeys.preCapGb, 2)
-    : getItem(StorageKeys.permanentCapGb, 10);
-
   if (kind === "pre-cache") {
-    const entries = await getAllCacheEntries();
-    const toEvict = selectEvictionCandidates(entries, capGb * 1024 * 1024 * 1024);
-    for (const key of toEvict) await deleteCacheEntry(key);
+    await ensurePreCacheSpace(blob.size, protectedKeys);
   }
 
   await putCacheEntry({
