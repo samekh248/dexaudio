@@ -1,0 +1,99 @@
+# Client playback session contract (feature 010)
+# No REST API changes — documents localStorage snapshot and restore invariants.
+
+openapi: 3.1.0
+info:
+  title: Dexaudio — Playback Session Persistence (Client)
+  version: 0.10.0
+  description: >
+    Feature 010 introduces no new `/api/v1/*` endpoints. This contract documents
+    the browser-local playback session snapshot used to restore queue and
+    now-playing context across reloads without auto-starting audio.
+
+components:
+  schemas:
+    QueueSource:
+      type: string
+      enum: [user, auto]
+
+    PersistedQueueItem:
+      type: object
+      required: [track, source]
+      properties:
+        track:
+          $ref: '#/components/schemas/Track'
+        source:
+          $ref: '#/components/schemas/QueueSource'
+
+    Track:
+      type: object
+      description: Mirror of @dexaudio/shared-types Track (subset persisted in full).
+      required: [id, title, artist, album, durationMs, format]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        artist:
+          type: string
+        album:
+          type: string
+        durationMs:
+          type: integer
+          minimum: 0
+        format:
+          type: string
+          enum: [flac, mp3, m4a, ogg, other]
+
+    PlaybackSessionSnapshot:
+      type: object
+      required: [schemaVersion, libraryId, items, currentIndex, savedAt]
+      properties:
+        schemaVersion:
+          type: integer
+          const: 1
+        libraryId:
+          type: string
+          minLength: 1
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PersistedQueueItem'
+        currentIndex:
+          type: ["integer", "null"]
+          minimum: 0
+          description: >
+            Index of now-playing track. null when queue was built but playback
+            never started (user must select a track after reload).
+        elapsedMs:
+          type: integer
+          minimum: 0
+          description: Present only when currentIndex is a number.
+        savedAt:
+          type: string
+          format: date-time
+
+    RestoreOutcome:
+      type: string
+      enum:
+        - restored
+        - empty_no_snapshot
+        - cleared_library_mismatch
+        - cleared_corrupt
+        - cleared_sign_out
+
+  x-invariants:
+    - On restore, Howler MUST NOT play until explicit user play action.
+    - skippedIndices MUST NOT appear in snapshot.
+    - libraryId in snapshot MUST match active library or snapshot is discarded.
+    - Route MUST NOT change as a result of restore.
+    - On corrupt parse, show non-blocking toast and start with empty queue.
+
+x-storage:
+  key: dexaudio.playback.session
+  medium: localStorage
+  clearOn:
+    - plex_sign_out
+    - plex_data_wipe
+    - active_library_change
