@@ -6,6 +6,11 @@ import type { PlaybackFailure, Track } from "@dexaudio/shared-types";
 
 import { getItem, isGaplessPlaybackEnabled, setItem, StorageKeys } from "@/lib/local-storage.js";
 
+import {
+  persistPlaybackSessionNow,
+  usePlaybackQueue,
+} from "@/stores/playback-queue-store.js";
+
 import { readFromCache } from "@/lib/cache-service.js";
 
 import { startListening, updateListenPosition, checkAndScrobble } from "@/lib/scrobble-tracker.js";
@@ -44,6 +49,11 @@ type StagedPlayback = {
 
 };
 
+export type LoadTrackOptions = {
+  autoplayOnLoad?: boolean;
+  initialSeekMs?: number;
+};
+
 
 
 function disposeStaged(slot: StagedPlayback | null) {
@@ -80,11 +90,11 @@ export function usePlayerState() {
 
   const retryOnceRef = useRef(false);
 
-  const loadTrackRef = useRef<(track: Track, onEnd?: () => void) => Promise<void>>(
+  const loadTrackRef = useRef<
+    (track: Track, onEnd?: () => void, options?: LoadTrackOptions) => Promise<void>
+  >(async () => undefined);
 
-    async () => undefined,
-
-  );
+  const positionPersistRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const onEndRef = useRef<(() => void) | undefined>(undefined);
 
@@ -108,7 +118,21 @@ export function usePlayerState() {
 
   const currentTrackRef = useRef<Track | null>(null);
 
+  const syncRestoredPosition = useCallback(() => {
+    const { restorePhase, restoredElapsedMs, playbackStarted } = usePlaybackQueue.getState();
+    if (restorePhase && playbackStarted && !howlRef.current) {
+      setPosition(restoredElapsedMs);
+    }
+  }, []);
 
+  useEffect(() => {
+    syncRestoredPosition();
+    return usePlaybackQueue.subscribe((state, prev) => {
+      if (state.restorePhase !== prev.restorePhase || state.restoredElapsedMs !== prev.restoredElapsedMs) {
+        syncRestoredPosition();
+      }
+    });
+  }, [syncRestoredPosition]);
 
   const crossfade = getItem(StorageKeys.crossfade, { enabled: false, durationSec: 3 });
 
@@ -658,7 +682,9 @@ export function usePlayerState() {
 
   const loadTrack = useCallback(
 
-    async (track: Track, onEnd?: () => void) => {
+    async (track: Track, onEnd?: () => void, options: LoadTrackOptions = {}) => {
+
+      const autoplayOnLoad = options.autoplayOnLoad ?? true;
 
       const loadId = ++loadIdRef.current;
 
@@ -722,13 +748,23 @@ export function usePlayerState() {
 
         onEnd,
 
-        true,
+        autoplayOnLoad,
 
         false,
 
       );
 
       howlRef.current = howl;
+
+      if (options.initialSeekMs !== undefined && options.initialSeekMs > 0) {
+        howl.once("load", () => {
+          if (loadIdRef.current !== loadId) return;
+          const seekSec = options.initialSeekMs! / 1000;
+          howl.seek(seekSec);
+          setPosition(options.initialSeekMs!);
+          updateListenPosition(options.initialSeekMs!);
+        });
+      }
 
     },
 
@@ -758,6 +794,8 @@ export function usePlayerState() {
 
     clearError();
 
+    usePlaybackQueue.getState().markPlaybackStarted();
+
     howlRef.current?.play();
 
   }, [clearError]);
@@ -767,6 +805,11 @@ export function usePlayerState() {
   const pause = useCallback(() => {
 
     howlRef.current?.pause();
+
+    if (howlRef.current) {
+      const ms = Math.round((howlRef.current.seek() as number) * 1000);
+      persistPlaybackSessionNow(ms);
+    }
 
   }, []);
 
@@ -871,6 +914,28 @@ export function usePlayerState() {
     }, 250);
 
     return () => clearInterval(id);
+
+  }, []);
+
+  useEffect(() => {
+
+    positionPersistRef.current = setInterval(() => {
+
+      const howl = howlRef.current;
+
+      if (!howl?.playing() || !usePlaybackQueue.getState().playbackStarted) return;
+
+      const ms = Math.round((howl.seek() as number) * 1000);
+
+      persistPlaybackSessionNow(ms);
+
+    }, 5000);
+
+    return () => {
+
+      if (positionPersistRef.current) clearInterval(positionPersistRef.current);
+
+    };
 
   }, []);
 

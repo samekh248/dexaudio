@@ -13,7 +13,17 @@ export const StorageKeys = {
   volume: `${PREFIX}volume`,
   customPresets: `${PREFIX}customPresets`,
   activeLibraryId: `${PREFIX}library.activeId`,
+  playbackSession: `${PREFIX}playback.session`,
 } as const;
+
+/** Persists active library id and clears playback session when the library changes (FR-012). */
+export function setActiveLibraryId(id: string): void {
+  const previous = getItem(StorageKeys.activeLibraryId, "");
+  if (previous && id && previous !== id) {
+    removeItem(StorageKeys.playbackSession);
+  }
+  setItem(StorageKeys.activeLibraryId, id);
+}
 
 export function getItem<T>(key: string, fallback: T): T {
   try {

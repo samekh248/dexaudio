@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useRef, type ReactNode } from "react";
 import { usePlayerState } from "@/hooks/use-player";
-import { usePlaybackQueue } from "@/stores/playback-queue-store";
+import {
+  getQueueCurrentTrack,
+  usePlaybackQueue,
+} from "@/stores/playback-queue-store";
 import { bumpPreCacheGeneration, runPreCacheForPlayback } from "@/lib/pre-cache-worker";
 import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
 
@@ -11,10 +14,13 @@ const PlayerContext = createContext<PlayerState | null>(null);
 /** Keeps the audio engine in sync with the queue on every route. */
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const player = usePlayerState();
-  const current = usePlaybackQueue((s) => s.items[s.currentIndex]?.track);
+  const current = usePlaybackQueue(getQueueCurrentTrack);
   const currentIndex = usePlaybackQueue((s) => s.currentIndex);
   const items = usePlaybackQueue((s) => s.items);
   const loadGeneration = usePlaybackQueue((s) => s.loadGeneration);
+  const restorePhase = usePlaybackQueue((s) => s.restorePhase);
+  const restoredElapsedMs = usePlaybackQueue((s) => s.restoredElapsedMs);
+  const playbackStarted = usePlaybackQueue((s) => s.playbackStarted);
 
   const advanceQueue = useCallback(() => {
     usePlaybackQueue.getState().next();
@@ -32,22 +38,42 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const onTrackEndRef = useRef(onTrackEnd);
   onTrackEndRef.current = onTrackEnd;
 
+  const startPlaybackFromRestore = useCallback(async () => {
+    const track = getQueueCurrentTrack(usePlaybackQueue.getState());
+    if (!track) return;
+    const elapsed = usePlaybackQueue.getState().restoredElapsedMs;
+    usePlaybackQueue.getState().exitRestorePhase();
+    usePlaybackQueue.getState().markPlaybackStarted();
+    await player.loadTrack(track, () => onTrackEndRef.current(), {
+      autoplayOnLoad: true,
+      initialSeekMs: elapsed,
+    });
+  }, [player]);
+
+  const playWithRestore = useCallback(() => {
+    if (restorePhase && current) {
+      void startPlaybackFromRestore();
+      return;
+    }
+    player.play();
+  }, [restorePhase, current, startPlaybackFromRestore, player]);
+
   useEffect(() => {
-    if (!current) return;
+    if (!current || !playbackStarted) return;
     const tracks = items.map((i) => i.track);
     const generation = bumpPreCacheGeneration();
     void runPreCacheForPlayback(tracks, currentIndex, generation);
-  }, [current?.id, currentIndex, items.length, loadGeneration]);
+  }, [current?.id, currentIndex, items.length, loadGeneration, playbackStarted]);
 
   useEffect(() => {
-    if (!current) return;
+    if (!current || restorePhase) return;
     if (player.getActiveTrackId() === current.id) return;
     void player.loadTrack(current, () => onTrackEndRef.current());
-  }, [current?.id, loadGeneration, player]);
+  }, [current?.id, loadGeneration, player, restorePhase]);
 
-  // Preload neighbors only after the current track is actually playing (avoids racing loadTrack).
   useEffect(() => {
     if (!current || player.loading || !player.playing) return;
+    if (restorePhase) return;
     if (player.getActiveTrackId() !== current.id) return;
     if (!isGaplessPlaybackEnabled()) return;
 
@@ -69,15 +95,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     player.getActiveTrackId,
     player.preloadForward,
     player.preloadBackward,
+    restorePhase,
   ]);
 
-  return <PlayerContext.Provider value={player}>{children}</PlayerContext.Provider>;
+  const playerWithRestore = {
+    ...player,
+    play: playWithRestore,
+    restoredElapsedMs,
+    restorePhase,
+  };
+
+  return (
+    <PlayerContext.Provider value={playerWithRestore}>{children}</PlayerContext.Provider>
+  );
 }
 
-export function usePlayer(): PlayerState {
+export function usePlayer(): PlayerState & { restorePhase: boolean; restoredElapsedMs: number } {
   const ctx = useContext(PlayerContext);
   if (!ctx) {
     throw new Error("usePlayer must be used within PlayerProvider");
   }
-  return ctx;
+  return ctx as PlayerState & { restorePhase: boolean; restoredElapsedMs: number };
 }

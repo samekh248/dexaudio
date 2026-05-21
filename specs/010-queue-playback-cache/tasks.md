@@ -24,9 +24,9 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 **Purpose**: Branch verification and test scaffolding before persistence work.
 
-- [ ] T001 Verify branch `010-queue-playback-cache` is checked out and `specs/010-queue-playback-cache/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
-- [ ] T002 [P] Run `cd frontend && npm test` — confirm green baseline before session persistence changes
-- [ ] T003 [P] Create `frontend/tests/unit/playback-session.test.ts` with Vitest imports and empty describe blocks for load/save/validate
+- [X] T001 Verify branch `010-queue-playback-cache` is checked out and `specs/010-queue-playback-cache/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
+- [X] T002 [P] Run `cd frontend && npm test` — confirm green baseline before session persistence changes
+- [X] T003 [P] Create `frontend/tests/unit/playback-session.test.ts` with Vitest imports and empty describe blocks for load/save/validate
 
 ---
 
@@ -36,10 +36,10 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 **⚠️ CRITICAL**: US1–US3 depend on `playback-session.ts` and `StorageKeys.playbackSession`.
 
-- [ ] T004 Add `playbackSession: dexaudio.playback.session` to `StorageKeys` in `frontend/src/lib/local-storage.ts`
-- [ ] T005 Create `frontend/src/lib/playback-session.ts` — export `PlaybackSessionSnapshot`, `PersistedQueueItem`, `RestoreOutcome`, `loadSnapshot`, `saveSnapshot`, `clearPlaybackSession`, `validateSnapshot` per [data-model.md](./data-model.md) and [contracts/playback-session.yaml](./contracts/playback-session.yaml) (`schemaVersion: 1`, max 200 items, libraryId match)
-- [ ] T006 Add `setActiveLibraryId(id)` (or equivalent) in `frontend/src/lib/local-storage.ts` that calls `clearPlaybackSession()` when the active library id changes (FR-012)
-- [ ] T007 [P] Unit tests in `frontend/tests/unit/playback-session.test.ts` — round-trip save/load, library mismatch → cleared, corrupt JSON → `cleared_corrupt`, oversize queue rejected, `currentIndex: null` queue-only snapshot
+- [X] T004 Add `playbackSession: dexaudio.playback.session` to `StorageKeys` in `frontend/src/lib/local-storage.ts`
+- [X] T005 Create `frontend/src/lib/playback-session.ts` — export `PlaybackSessionSnapshot`, `PersistedQueueItem`, `RestoreOutcome`, `loadSnapshot`, `saveSnapshot`, `clearPlaybackSession`, `validateSnapshot` per [data-model.md](./data-model.md) and [contracts/playback-session.yaml](./contracts/playback-session.yaml) (`schemaVersion: 1`, max 200 items, libraryId match)
+- [X] T006 Add `setActiveLibraryId(id)` (or equivalent) in `frontend/src/lib/local-storage.ts` that calls `clearPlaybackSession()` when the active library id changes (FR-012)
+- [X] T007 [P] Unit tests in `frontend/tests/unit/playback-session.test.ts` — round-trip save/load, library mismatch → cleared, corrupt JSON → `cleared_corrupt`, oversize queue rejected, `currentIndex: null` queue-only snapshot
 
 **Checkpoint**: `loadSnapshot` / `saveSnapshot` / `clearPlaybackSession` pass unit tests in isolation.
 
@@ -53,13 +53,13 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 ### Tests for User Story 1
 
-- [ ] T008 [P] [US1] Extend `frontend/tests/unit/playback-queue-store.test.ts` — `hydrateFromSnapshot` restores items order and `source`; empty snapshot leaves empty queue
+- [X] T008 [P] [US1] Extend `frontend/tests/unit/playback-queue-store.test.ts` — `hydrateFromSnapshot` restores items order and `source`; empty snapshot leaves empty queue
 
 ### Implementation for User Story 1
 
-- [ ] T009 [US1] Add `hydrateFromSnapshot`, `playbackStarted`, `hydrated` to `frontend/src/stores/playback-queue-store.ts` — apply `items` from snapshot; when `currentIndex === null` set queue-only mode (no current playback UI) per clarification session
-- [ ] T010 [US1] Subscribe to `usePlaybackQueue` in `frontend/src/stores/playback-queue-store.ts` (or dedicated `initPlaybackPersistence`) — debounced 300 ms `saveSnapshot` on `items` / reorder / remove / add changes (FR-001, FR-005); omit `skippedIndices` (FR-014)
-- [ ] T011 [US1] Call `hydrateFromSnapshot(loadSnapshot(activeLibraryId))` on app boot in `frontend/src/App.tsx` or store init before `PlayerProvider` mounts (FR-006)
+- [X] T009 [US1] Add `hydrateFromSnapshot`, `playbackStarted`, `hydrated` to `frontend/src/stores/playback-queue-store.ts` — apply `items` from snapshot; when `currentIndex === null` set queue-only mode (no current playback UI) per clarification session
+- [X] T010 [US1] Subscribe to `usePlaybackQueue` in `frontend/src/stores/playback-queue-store.ts` (or dedicated `initPlaybackPersistence`) — debounced 300 ms `saveSnapshot` on `items` / reorder / remove / add changes (FR-001, FR-005); omit `skippedIndices` (FR-014)
+- [X] T011 [US1] Call `hydrateFromSnapshot(loadSnapshot(activeLibraryId))` on app boot in `frontend/src/App.tsx` or store init before `PlayerProvider` mounts (FR-006)
 
 **Checkpoint**: Reload preserves queue order and user/auto distinction; T008 passes; silent on load (no autoplay yet — completed in US2).
 
@@ -73,15 +73,15 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 ### Tests for User Story 2
 
-- [ ] T012 [P] [US2] Add tests in `frontend/tests/unit/playback-queue-store.test.ts` — snapshot with `currentIndex` + `elapsedMs` hydrates index and `playbackStarted`; queue-only `currentIndex: null` does not mark playing
-- [ ] T013 [P] [US2] Add test in `frontend/tests/unit/playback-session.test.ts` or new `player-restore.test.tsx` — mock `PlayerProvider` effect: when `restorePhase` true, `loadTrack` not called until play (FR-004, SC-003)
+- [X] T012 [P] [US2] Add tests in `frontend/tests/unit/playback-queue-store.test.ts` — snapshot with `currentIndex` + `elapsedMs` hydrates index and `playbackStarted`; queue-only `currentIndex: null` does not mark playing
+- [X] T013 [P] [US2] Add test in `frontend/tests/unit/playback-session.test.ts` or new `player-restore.test.tsx` — mock `PlayerProvider` effect: when `restorePhase` true, `loadTrack` not called until play (FR-004, SC-003)
 
 ### Implementation for User Story 2
 
-- [ ] T014 [US2] Update `loadTrack` in `frontend/src/hooks/use-player.ts` to accept `autoplayOnLoad` (default `true` for live play); support `restoredElapsedMs` display in UI before Howl loads
-- [ ] T015 [US2] Add restore phase to `frontend/src/contexts/player-context.tsx` — skip `loadTrack` effect while restoring; on user `play()`, exit restore phase, `loadTrack` + seek to `elapsedMs` (FR-003, FR-008)
-- [ ] T016 [US2] Persist `currentIndex` and `elapsedMs` in `saveSnapshot` only when `playbackStarted` is true; throttle position writes every 5 s + on pause/`pagehide` in `frontend/src/hooks/use-player.ts` or persistence subscriber (FR-002, FR-003, FR-005)
-- [ ] T017 [US2] Set `playbackStarted` true on first user-initiated play / successful `playNow`; ensure mini-player and Now Playing read restored track/position without route change (FR-013)
+- [X] T014 [US2] Update `loadTrack` in `frontend/src/hooks/use-player.ts` to accept `autoplayOnLoad` (default `true` for live play); support `restoredElapsedMs` display in UI before Howl loads
+- [X] T015 [US2] Add restore phase to `frontend/src/contexts/player-context.tsx` — skip `loadTrack` effect while restoring; on user `play()`, exit restore phase, `loadTrack` + seek to `elapsedMs` (FR-003, FR-008)
+- [X] T016 [US2] Persist `currentIndex` and `elapsedMs` in `saveSnapshot` only when `playbackStarted` is true; throttle position writes every 5 s + on pause/`pagehide` in `frontend/src/hooks/use-player.ts` or persistence subscriber (FR-002, FR-003, FR-005)
+- [X] T017 [US2] Set `playbackStarted` true on first user-initiated play / successful `playNow`; ensure mini-player and Now Playing read restored track/position without route change (FR-013)
 
 **Checkpoint**: Reload shows correct track + position, zero auto-audio; explicit play resumes within 2 s tolerance; T012–T013 pass.
 
@@ -95,14 +95,14 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 ### Tests for User Story 3
 
-- [ ] T018 [P] [US3] Unit test in `frontend/tests/unit/playback-session.test.ts` — `notifyRestoreFailure` or load path triggers toast message string for corrupt snapshot (FR-015)
-- [ ] T019 [P] [US3] Unit test — `clearPlaybackSession` invoked when `setActiveLibraryId` changes to different id (FR-012)
+- [X] T018 [P] [US3] Unit test in `frontend/tests/unit/playback-session.test.ts` — `notifyRestoreFailure` or load path triggers toast message string for corrupt snapshot (FR-015)
+- [X] T019 [P] [US3] Unit test — `clearPlaybackSession` invoked when `setActiveLibraryId` changes to different id (FR-012)
 
 ### Implementation for User Story 3
 
-- [ ] T020 [US3] Call `clearPlaybackSession()` from `frontend/src/components/plex-auth/PlexAuthModal.tsx` on `dataWiped` and sign-out/disconnect paths (FR-009)
-- [ ] T021 [US3] On `RestoreOutcome.cleared_corrupt`, show non-blocking toast via `sonner` in hydrate bootstrap (`frontend/src/App.tsx` or `playback-session.ts` consumer) per [research.md](./research.md) §7 (FR-015)
-- [ ] T022 [US3] Verify post-restore play of unavailable track surfaces existing error + skip in `frontend/src/pages/NowPlayingPage.tsx` / `use-player` — adjust only if restore path bypasses failure handling (FR-010)
+- [X] T020 [US3] Call `clearPlaybackSession()` from `frontend/src/components/plex-auth/PlexAuthModal.tsx` on `dataWiped` and sign-out/disconnect paths (FR-009)
+- [X] T021 [US3] On `RestoreOutcome.cleared_corrupt`, show non-blocking toast via `sonner` in hydrate bootstrap (`frontend/src/App.tsx` or `playback-session.ts` consumer) per [research.md](./research.md) §7 (FR-015)
+- [X] T022 [US3] Verify post-restore play of unavailable track surfaces existing error + skip in `frontend/src/pages/NowPlayingPage.tsx` / `use-player` — adjust only if restore path bypasses failure handling (FR-010)
 
 **Checkpoint**: Auth wipe and library change clear cache; corrupt load shows toast; unavailable track behavior unchanged from feature 004.
 
@@ -112,9 +112,9 @@ description: "Task list for feature 010 — Queue and Now Playing Persistence"
 
 **Purpose**: Full regression and manual validation.
 
-- [ ] T023 Run `cd frontend && npm test` — full frontend suite green
-- [ ] T024 Execute manual checklist in `specs/010-queue-playback-cache/quickstart.md` (queue restore, position restore, queue-only, sign-out clear, corrupt cache, no auto-nav)
-- [ ] T025 [P] Fix any test or implementation gaps found during T024; update `quickstart.md` only if steps diverge from actual UI
+- [X] T023 Run `cd frontend && npm test` — full frontend suite green
+- [X] T024 Execute manual checklist in `specs/010-queue-playback-cache/quickstart.md` (queue restore, position restore, queue-only, sign-out clear, corrupt cache, no auto-nav)
+- [X] T025 [P] Fix any test or implementation gaps found during T024; update `quickstart.md` only if steps diverge from actual UI
 
 ---
 
