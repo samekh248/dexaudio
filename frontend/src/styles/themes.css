@@ -39,3 +39,12 @@
 body {
   @apply bg-background text-foreground min-h-screen antialiased;
 }
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
