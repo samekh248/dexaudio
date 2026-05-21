@@ -34,7 +34,7 @@ export type ValidateResult =
   | { ok: false; reason: "corrupt" | "library_mismatch" | "oversize" };
 
 function isQueueSource(value: unknown): value is QueueSource {
-  return value === "user" || value === "auto";
+  return value === "user" || value === "auto" || value === "queued";
 }
 
 function isTrack(value: unknown): value is Track {

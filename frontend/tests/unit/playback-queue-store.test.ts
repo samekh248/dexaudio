@@ -65,6 +65,13 @@ describe("playback queue store", () => {
     expect(usePlaybackQueue.getState().items.every((i) => i.source === "user")).toBe(true);
   });
 
+  it("play now clears previous album but preserves manually queued items", () => {
+    usePlaybackQueue.getState().playNow([track("a1"), track("a2")]);
+    usePlaybackQueue.getState().addToQueue([track("manual")]);
+    usePlaybackQueue.getState().playNow([track("b1")]);
+    expect(usePlaybackQueue.getState().items.map((i) => i.track.id)).toEqual(["b1", "manual"]);
+  });
+
   it("tracks skipped indices", () => {
     usePlaybackQueue.getState().markSkipped(2);
     expect(usePlaybackQueue.getState().skippedIndices.has(2)).toBe(true);

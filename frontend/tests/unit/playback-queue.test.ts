@@ -16,21 +16,21 @@ const track = (id: string): Track => ({
 });
 
 describe("playback queue reducer rules", () => {
-  it("play now replaces current and keeps user items", () => {
+  it("play now replaces current and keeps manually queued items", () => {
     const existing: QueueItem[] = [
       { track: track("1"), source: "user" },
       { track: track("2"), source: "auto" },
+      { track: track("queued"), source: "queued" },
     ];
     const result = queueReducerPlayNow(existing, [track("new")]);
-    expect(result[0].track.id).toBe("new");
+    expect(result.map((i) => i.track.id)).toEqual(["new", "queued"]);
     expect(result.some((i) => i.source === "auto")).toBe(false);
-    expect(result.filter((i) => i.source === "user")).toHaveLength(2);
   });
 
-  it("add to queue appends user items", () => {
+  it("add to queue appends manually queued items", () => {
     const existing: QueueItem[] = [{ track: track("1"), source: "user" }];
     const result = queueReducerAdd(existing, [track("2")]);
     expect(result).toHaveLength(2);
-    expect(result[1].source).toBe("user");
+    expect(result[1].source).toBe("queued");
   });
 });

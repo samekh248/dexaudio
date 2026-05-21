@@ -7,7 +7,7 @@ import {
   type PersistedQueueItem,
 } from "@/lib/playback-session";
 
-export type QueueSource = "user" | "auto";
+export type QueueSource = "user" | "auto" | "queued";
 
 export interface QueueItem {
   track: Track;
@@ -142,10 +142,10 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
   },
 
   playNow: (tracks) => {
-    const userItems = get().items.filter((i) => i.source === "user");
+    const manuallyQueued = get().items.filter((i) => i.source === "queued");
     const newItems: QueueItem[] = [
       ...tracks.map((t) => ({ track: t, source: "user" as const })),
-      ...userItems,
+      ...manuallyQueued,
     ];
     set((s) => ({
       items: newItems,
@@ -172,7 +172,7 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
     set((s) => ({
       items: [
         ...s.items,
-        ...tracks.map((t) => ({ track: t, source: "user" as const })),
+        ...tracks.map((t) => ({ track: t, source: "queued" as const })),
       ],
     }));
     schedulePersist(get);
@@ -235,7 +235,7 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
 
   clearAutoItems: () => {
     set((s) => ({
-      items: s.items.filter((i) => i.source === "user"),
+      items: s.items.filter((i) => i.source !== "auto"),
       currentIndex: 0,
     }));
     schedulePersist(get);
@@ -275,13 +275,13 @@ export function queueReducerPlayNow(
   items: QueueItem[],
   tracks: Track[],
 ): QueueItem[] {
-  const userItems = items.filter((i) => i.source === "user");
+  const manuallyQueued = items.filter((i) => i.source === "queued");
   return [
     ...tracks.map((t) => ({ track: t, source: "user" as const })),
-    ...userItems,
+    ...manuallyQueued,
   ];
 }
 
 export function queueReducerAdd(items: QueueItem[], tracks: Track[]): QueueItem[] {
-  return [...items, ...tracks.map((t) => ({ track: t, source: "user" as const }))];
+  return [...items, ...tracks.map((t) => ({ track: t, source: "queued" as const }))];
 }

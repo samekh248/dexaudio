@@ -69,7 +69,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     if (!current || restorePhase) return;
     if (player.getActiveTrackId() === current.id) return;
     void player.loadTrack(current, () => onTrackEndRef.current());
-  }, [current?.id, loadGeneration, player, restorePhase]);
+  }, [current?.id, loadGeneration, player.loadTrack, player.getActiveTrackId, restorePhase]);
 
   useEffect(() => {
     if (!current || player.loading || !player.playing) return;

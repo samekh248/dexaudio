@@ -3,6 +3,11 @@ import { ApiError } from "@/services/api-client.js";
 
 const API_BASE = "/api/v1";
 
+/** Same-origin proxy URL for progressive HTML5 playback (Howler). */
+export function streamUrlForTrack(trackId: string): string {
+  return `${API_BASE}/stream/${trackId}`;
+}
+
 export async function fetchTrackAudioBlob(trackId: string, signal?: AbortSignal): Promise<Blob> {
   const res = await fetch(`${API_BASE}/stream/${trackId}`, { signal });
   const ct = res.headers.get("content-type") ?? "";

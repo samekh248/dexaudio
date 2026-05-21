@@ -31,9 +31,9 @@ import {
 
   blobUrlForTrack,
 
-  fetchTrackAudioBlob,
-
   howlerFormatsForTrack,
+
+  streamUrlForTrack,
 
 } from "@/lib/stream-audio.js";
 
@@ -52,6 +52,7 @@ type StagedPlayback = {
 export type LoadTrackOptions = {
   autoplayOnLoad?: boolean;
   initialSeekMs?: number;
+  skipCache?: boolean;
 };
 
 
@@ -204,37 +205,49 @@ export function usePlayerState() {
 
       loadId: number,
 
+      options: { skipCache?: boolean } = {},
+
     ): Promise<{ src: string; fromCache: boolean; useLiveOnCacheError: boolean } | null> => {
 
       try {
 
-        const cached = await readFromCache(track.id);
+        if (!options.skipCache) {
 
-        if (loadIdRef.current !== loadId) return null;
+          const cached = await readFromCache(track.id);
+
+          if (loadIdRef.current !== loadId) return null;
 
 
 
-        if (cached && cached.size > 2048) {
+          if (cached && cached.size > 2048) {
 
-          const url = blobUrlForTrack(track, cached);
+            const url = blobUrlForTrack(track, cached);
 
-          return { src: url, fromCache: true, useLiveOnCacheError: true };
+            return { src: url, fromCache: true, useLiveOnCacheError: true };
+
+          }
 
         }
 
 
 
-        const blob = await fetchTrackAudioBlob(track.id);
+        if (loadIdRef.current !== loadId) return null;
+
+        return {
+
+          src: streamUrlForTrack(track.id),
+
+          fromCache: false,
+
+          useLiveOnCacheError: false,
+
+        };
+
+      } catch (err) {
 
         if (loadIdRef.current !== loadId) return null;
 
-        const url = blobUrlForTrack(track, blob);
-
-        return { src: url, fromCache: false, useLiveOnCacheError: false };
-
-      } catch {
-
-        return null;
+        throw err;
 
       }
 
@@ -258,10 +271,12 @@ export function usePlayerState() {
           return { src: url, fromCache: true, useLiveOnCacheError: true };
         }
 
-        const blob = await fetchTrackAudioBlob(track.id);
         if (stagedGenRef.current !== stagedGen) return null;
-        const url = blobUrlForTrack(track, blob);
-        return { src: url, fromCache: false, useLiveOnCacheError: false };
+        return {
+          src: streamUrlForTrack(track.id),
+          fromCache: false,
+          useLiveOnCacheError: false,
+        };
       } catch {
         return null;
       }
@@ -401,7 +416,7 @@ export function usePlayerState() {
 
             if (src.startsWith("blob:")) URL.revokeObjectURL(src);
 
-            void loadTrackRef.current(track, onEnd);
+            void loadTrackRef.current(track, onEnd, { skipCache: true });
 
             return;
 
@@ -690,9 +705,9 @@ export function usePlayerState() {
 
       retryOnceRef.current = false;
 
+      positionAtErrorRef.current = 0;
+
       onEndRef.current = onEnd;
-
-
 
       cancelStagedPreloads();
 
@@ -708,17 +723,49 @@ export function usePlayerState() {
 
 
 
-      const resolved = await resolveTrackSrc(track, loadId);
+      let resolved: Awaited<ReturnType<typeof resolveTrackSrc>>;
 
-      if (loadIdRef.current !== loadId || !resolved) {
+      try {
 
-        if (loadIdRef.current === loadId && !resolved) {
+        resolved = await resolveTrackSrc(track, loadId, {
 
-          setError(classifyPlaybackError("howler", 2, track));
+          skipCache: options.skipCache,
 
-          setLoading(false);
+        });
+
+      } catch (err) {
+
+        if (loadIdRef.current !== loadId) return;
+
+        setLoading(false);
+
+        if (err instanceof ApiError) {
+
+          setError(classifyPlaybackError("api", err, track));
+
+        } else {
+
+          setError(
+
+            classifyPlaybackError(
+
+              "howler",
+
+              err instanceof Error ? err.message : 2,
+
+              track,
+
+            ),
+
+          );
 
         }
+
+        return;
+
+      }
+
+      if (loadIdRef.current !== loadId || !resolved) {
 
         return;
 
