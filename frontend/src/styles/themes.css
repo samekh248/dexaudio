@@ -48,3 +48,115 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+.eq-visualizer {
+  display: inline-flex;
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+}
+
+.eq-visualizer__bar {
+  display: block;
+  width: 2.5px;
+  height: 100%;
+  border-radius: 1px;
+  background-color: currentColor;
+  transform-origin: bottom center;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.eq-visualizer__bar:nth-child(1) {
+  animation-name: eq-bar-1;
+  animation-duration: 0.72s;
+}
+
+.eq-visualizer__bar:nth-child(2) {
+  animation-name: eq-bar-2;
+  animation-duration: 0.95s;
+}
+
+.eq-visualizer__bar:nth-child(3) {
+  animation-name: eq-bar-3;
+  animation-duration: 0.84s;
+}
+
+.eq-visualizer__bar:nth-child(4) {
+  animation-name: eq-bar-4;
+  animation-duration: 1.05s;
+}
+
+@keyframes eq-bar-1 {
+  0%,
+  100% {
+    transform: scaleY(0.2);
+  }
+  25% {
+    transform: scaleY(0.95);
+  }
+  55% {
+    transform: scaleY(0.35);
+  }
+  80% {
+    transform: scaleY(0.75);
+  }
+}
+
+@keyframes eq-bar-2 {
+  0%,
+  100% {
+    transform: scaleY(0.7);
+  }
+  30% {
+    transform: scaleY(0.22);
+  }
+  60% {
+    transform: scaleY(1);
+  }
+  85% {
+    transform: scaleY(0.45);
+  }
+}
+
+@keyframes eq-bar-3 {
+  0%,
+  100% {
+    transform: scaleY(0.42);
+  }
+  20% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.28);
+  }
+  75% {
+    transform: scaleY(0.88);
+  }
+}
+
+@keyframes eq-bar-4 {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  35% {
+    transform: scaleY(0.58);
+  }
+  65% {
+    transform: scaleY(1);
+  }
+  90% {
+    transform: scaleY(0.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eq-visualizer__bar {
+    animation: none;
+    transform: scaleY(0.65);
+  }
+}
