@@ -98,6 +98,7 @@ export function AlbumsHomePage() {
         title="Artist Spotlights"
         groupKey="artist-spotlights"
         query={groups.artistSpotlights}
+        showViewAll={false}
       >
         {(items) => (
           <AlbumGroupRow

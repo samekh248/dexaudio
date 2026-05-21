@@ -24,9 +24,9 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 **Purpose**: Branch verification and test scaffolding before carousel changes.
 
-- [ ] T001 Verify branch `009-library-scroll-buttons` is checked out and `specs/009-library-scroll-buttons/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
-- [ ] T002 [P] Run `cd frontend && npm test` — confirm green baseline before carousel changes
-- [ ] T003 [P] Create `frontend/tests/unit/use-horizontal-carousel.test.ts` with empty describe block and Vitest/RTL imports wired
+- [X] T001 Verify branch `009-library-scroll-buttons` is checked out and `specs/009-library-scroll-buttons/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
+- [X] T002 [P] Run `cd frontend && npm test` — confirm green baseline before carousel changes
+- [X] T003 [P] Create `frontend/tests/unit/use-horizontal-carousel.test.ts` with empty describe block and Vitest/RTL imports wired
 
 ---
 
@@ -36,12 +36,12 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 **⚠️ CRITICAL**: US1–US3 depend on `useHorizontalCarousel` and hidden-scrollbar styling.
 
-- [ ] T004 Add `.scrollbar-hide` utility to `frontend/src/styles/themes.css` per `research.md` §4 (`scrollbar-width: none`, `-ms-overflow-style: none`, `::-webkit-scrollbar { display: none }`)
-- [ ] T005 Create `frontend/src/hooks/use-horizontal-carousel.ts` — export hook with `scrollRef`, `scrollForward`, `scrollBackward`, `canScrollLeft`, `canScrollRight`, `needsScrollControls`; constants `SCROLL_EPSILON=2`, `MIN_SCROLL_STEP=1` per `data-model.md`
-- [ ] T006 Implement visible-entry counting in `frontend/src/hooks/use-horizontal-carousel.ts` — iterate direct children, `getBoundingClientRect` full-visibility check with 1 px tolerance; return min 1 when count is 0 (FR-012)
-- [ ] T007 Implement `scrollForward` / `scrollBackward` in `frontend/src/hooks/use-horizontal-carousel.ts` — step by visible count, clamp target index, final page aligns last child to trailing edge, snap via `scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'smooth' })` per `research.md` §3
-- [ ] T008 Wire `ResizeObserver` and `scroll` listeners in `frontend/src/hooks/use-horizontal-carousel.ts` — recompute `canScrollLeft`, `canScrollRight`, `needsScrollControls` on resize and scroll (FR-005, FR-010)
-- [ ] T009 [P] Unit tests in `frontend/tests/unit/use-horizontal-carousel.test.ts` — mock container/child rects for visible count, forward/backward target index, at-start/at-end flags, and min-step-when-zero-visible case
+- [X] T004 Add `.scrollbar-hide` utility to `frontend/src/styles/themes.css` per `research.md` §4 (`scrollbar-width: none`, `-ms-overflow-style: none`, `::-webkit-scrollbar { display: none }`)
+- [X] T005 Create `frontend/src/hooks/use-horizontal-carousel.ts` — export hook with `scrollRef`, `scrollForward`, `scrollBackward`, `canScrollLeft`, `canScrollRight`, `needsScrollControls`; constants `SCROLL_EPSILON=2`, `MIN_SCROLL_STEP=1` per `data-model.md`
+- [X] T006 Implement visible-entry counting in `frontend/src/hooks/use-horizontal-carousel.ts` — iterate direct children, `getBoundingClientRect` full-visibility check with 1 px tolerance; return min 1 when count is 0 (FR-012)
+- [X] T007 Implement `scrollForward` / `scrollBackward` in `frontend/src/hooks/use-horizontal-carousel.ts` — step by visible count, clamp target index, final page aligns last child to trailing edge, snap via `scrollIntoView({ inline: 'start', block: 'nearest', behavior: 'smooth' })` per `research.md` §3
+- [X] T008 Wire `ResizeObserver` and `scroll` listeners in `frontend/src/hooks/use-horizontal-carousel.ts` — recompute `canScrollLeft`, `canScrollRight`, `needsScrollControls` on resize and scroll (FR-005, FR-010)
+- [X] T009 [P] Unit tests in `frontend/tests/unit/use-horizontal-carousel.test.ts` — mock container/child rects for visible count, forward/backward target index, at-start/at-end flags, and min-step-when-zero-visible case
 
 **Checkpoint**: Hook callable from tests; scroll math and visibility flags pass unit tests.
 
@@ -55,13 +55,13 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Update `frontend/tests/unit/AlbumGroupRow.test.tsx` — assert `scrollbar-hide` on scroll container, no `overflow-x-auto` scrollbar reliance; right button visible when content overflows; left button absent at start
+- [X] T010 [P] [US1] Update `frontend/tests/unit/AlbumGroupRow.test.tsx` — assert `scrollbar-hide` on scroll container, no `overflow-x-auto` scrollbar reliance; right button visible when content overflows; left button absent at start
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Refactor layout in `frontend/src/components/albums/AlbumGroupRow.tsx` — three-column flex: left gutter (`w-10`) | scroll container (`flex-1 scrollbar-hide overflow-x-auto`) | right gutter (`w-10`); gutters render only when `needsScrollControls` per `contracts/ui-carousel.md`
-- [ ] T012 [US1] Wire `useHorizontalCarousel` in `frontend/src/components/albums/AlbumGroupRow.tsx` — render shadcn `Button` `variant="ghost"` `size="icon"` with `ChevronLeft`/`ChevronRight` from `lucide-react`; hide left when `!canScrollLeft`, hide right when `!canScrollRight` (FR-006, FR-007, FR-013)
-- [ ] T013 [US1] Preserve carousel `role="region"`, `aria-label`, and `tabIndex={0}` on scroll container in `frontend/src/components/albums/AlbumGroupRow.tsx`; keep `scroll-smooth` class
+- [X] T011 [US1] Refactor layout in `frontend/src/components/albums/AlbumGroupRow.tsx` — three-column flex: left gutter (`w-10`) | scroll container (`flex-1 scrollbar-hide overflow-x-auto`) | right gutter (`w-10`); gutters render only when `needsScrollControls` per `contracts/ui-carousel.md`
+- [X] T012 [US1] Wire `useHorizontalCarousel` in `frontend/src/components/albums/AlbumGroupRow.tsx` — render shadcn `Button` `variant="ghost"` `size="icon"` with `ChevronLeft`/`ChevronRight` from `lucide-react`; hide left when `!canScrollLeft`, hide right when `!canScrollRight` (FR-006, FR-007, FR-013)
+- [X] T013 [US1] Preserve carousel `role="region"`, `aria-label`, and `tabIndex={0}` on scroll container in `frontend/src/components/albums/AlbumGroupRow.tsx`; keep `scroll-smooth` class
 
 **Checkpoint**: Single overflowing row scrolls via buttons with correct hide/show behavior; T010 passes.
 
@@ -75,12 +75,12 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 ### Tests for User Story 2
 
-- [ ] T014 [P] [US2] Add test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — render row with mixed-width children (e.g. `w-[160px]` spans + wider tile) and assert scroll step uses fully-visible count regardless of entry type (FR-009)
-- [ ] T015 [P] [US2] Add test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — row with all entries fitting in container width renders no gutter buttons (`needsScrollControls` false, FR-008)
+- [X] T014 [P] [US2] Add test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — render row with mixed-width children (e.g. `w-[160px]` spans + wider tile) and assert scroll step uses fully-visible count regardless of entry type (FR-009)
+- [X] T015 [P] [US2] Add test in `frontend/tests/unit/AlbumGroupRow.test.tsx` — row with all entries fitting in container width renders no gutter buttons (`needsScrollControls` false, FR-008)
 
 ### Implementation for User Story 2
 
-- [ ] T016 [US2] Audit `frontend/src/pages/AlbumsHomePage.tsx` — confirm all five groups use `AlbumGroupRow` without per-row scroll overrides; no code changes expected unless a row bypasses the component
+- [X] T016 [US2] Audit `frontend/src/pages/AlbumsHomePage.tsx` — confirm all five groups use `AlbumGroupRow` without per-row scroll overrides; no code changes expected unless a row bypasses the component
 
 **Checkpoint**: All home rows inherit US1 behavior; mixed entry types and non-overflow rows covered by tests.
 
@@ -94,13 +94,13 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 ### Tests for User Story 3
 
-- [ ] T017 [P] [US3] Add tests in `frontend/tests/unit/AlbumGroupRow.test.tsx` — buttons have `aria-label="Scroll left"` / `"Scroll right"`; buttons are keyboard focusable (FR-011)
-- [ ] T018 [P] [US3] Add test in `frontend/tests/unit/use-horizontal-carousel.test.ts` — simulate `scroll` event updates `canScrollLeft`/`canScrollRight` after programmatic `scrollLeft` change (touch/trackpad path, FR-010)
+- [X] T017 [P] [US3] Add tests in `frontend/tests/unit/AlbumGroupRow.test.tsx` — buttons have `aria-label="Scroll left"` / `"Scroll right"`; buttons are keyboard focusable (FR-011)
+- [X] T018 [P] [US3] Add test in `frontend/tests/unit/use-horizontal-carousel.test.ts` — simulate `scroll` event updates `canScrollLeft`/`canScrollRight` after programmatic `scrollLeft` change (touch/trackpad path, FR-010)
 
 ### Implementation for User Story 3
 
-- [ ] T019 [US3] Add `aria-label="Scroll left"` and `aria-label="Scroll right"` to gutter buttons in `frontend/src/components/albums/AlbumGroupRow.tsx`
-- [ ] T020 [US3] Verify gutter columns in `frontend/src/components/albums/AlbumGroupRow.tsx` contain only buttons (no card content overlap) — adjust flex/gutter width if cards intrude into gutter hit area (FR-014)
+- [X] T019 [US3] Add `aria-label="Scroll left"` and `aria-label="Scroll right"` to gutter buttons in `frontend/src/components/albums/AlbumGroupRow.tsx`
+- [X] T020 [US3] Verify gutter columns in `frontend/src/components/albums/AlbumGroupRow.tsx` contain only buttons (no card content overlap) — adjust flex/gutter width if cards intrude into gutter hit area (FR-014)
 
 **Checkpoint**: Accessibility and alternate navigation paths verified; no regression on card interactions.
 
@@ -110,7 +110,7 @@ description: "Task list for feature 009 — Library Scroll Buttons"
 
 **Purpose**: Full regression pass and manual validation across viewports.
 
-- [ ] T021 Run `cd frontend && npm test` — full frontend suite green
+- [X] T021 Run `cd frontend && npm test` — full frontend suite green
 - [ ] T022 Execute manual checklist in `specs/009-library-scroll-buttons/quickstart.md` at typical desktop and 320 px widths for all five home rows
 - [ ] T023 [P] Fix any test or implementation gaps found during T022; update `specs/009-library-scroll-buttons/quickstart.md` only if steps diverge from actual UI
 
