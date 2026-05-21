@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { PlaybackAffordance } from "@dexaudio/shared-types";
-import { usePlaybackQueue } from "@/stores/playback-queue-store";
+import { getQueueCurrentTrack, usePlaybackQueue } from "@/stores/playback-queue-store";
 import { usePlayer } from "@/contexts/player-context";
 import { AudioPlayer } from "@/components/player/AudioPlayer";
 import { PlaybackErrorBanner } from "@/components/player/PlaybackErrorBanner";
@@ -29,7 +29,9 @@ export function NowPlayingPage() {
     resetSkipped,
   } = usePlaybackQueue();
   const player = usePlayer();
-  const current = items[currentIndex]?.track;
+  const playbackStarted = usePlaybackQueue((s) => s.playbackStarted);
+  const current = usePlaybackQueue(getQueueCurrentTrack);
+  const displayIndex = playbackStarted ? currentIndex : -1;
   const [queueExhausted, setQueueExhausted] = useState(false);
   const lastErrorRef = useRef<string | null>(null);
 
@@ -43,6 +45,9 @@ export function NowPlayingPage() {
   useEffect(() => {
     if (!player.error) {
       lastErrorRef.current = null;
+      return;
+    }
+    if (player.error.trackId && current?.id && player.error.trackId !== current.id) {
       return;
     }
     const key = `${player.error.category}:${player.error.trackId}:${player.error.timestamp}`;
@@ -105,6 +110,11 @@ export function NowPlayingPage() {
     }
   };
 
+  const handleQueueSelect = (index: number) => {
+    player.clearError();
+    setIndex(index);
+  };
+
   if (!current) {
     return <p className="text-muted-foreground">Queue is empty. Play something from an album.</p>;
   }
@@ -158,7 +168,11 @@ export function NowPlayingPage() {
 
         <AudioPlayer
           playing={player.playing}
-          position={player.position}
+          position={
+            player.restorePhase && !player.playing
+              ? player.restoredElapsedMs
+              : player.position
+          }
           duration={player.duration || current.durationMs}
           volume={player.volume}
           fromCache={player.fromCache}
@@ -199,8 +213,8 @@ export function NowPlayingPage() {
       </div>
       <QueuePanel
         items={items}
-        currentIndex={currentIndex}
-        onSelect={setIndex}
+        currentIndex={displayIndex}
+        onSelect={handleQueueSelect}
         onRemove={removeAt}
       />
     </div>

@@ -2,14 +2,17 @@ import type { Track } from "@dexaudio/shared-types";
 import { writeToCache } from "./cache-service.js";
 import { buildGaplessSlots } from "./gapless-cache-slots.js";
 import { getItem, isGaplessPlaybackEnabled, StorageKeys } from "./local-storage.js";
+import { fetchTrackAudioBlob } from "./stream-audio.js";
 
 async function cacheTrack(
   track: Track,
   protectedKeys: ReadonlySet<string>,
+  isStale: () => boolean,
 ): Promise<void> {
   if (track.format === "unsupported") return;
   try {
-    const blob = await fetch(`/api/v1/stream/${track.id}`).then((r) => r.blob());
+    const blob = await fetchTrackAudioBlob(track.id);
+    if (isStale()) return;
     const versionSignal = `${track.id}-${blob.size}`;
     await writeToCache(track.id, blob, versionSignal, "pre-cache", false, protectedKeys);
   } catch {
@@ -17,12 +20,18 @@ async function cacheTrack(
   }
 }
 
-export async function preCacheUpcoming(tracks: Track[], currentIndex: number): Promise<void> {
+export async function preCacheUpcoming(
+  tracks: Track[],
+  currentIndex: number,
+  generation: number,
+  isStale: () => boolean,
+): Promise<void> {
   const lookAhead = getItem(StorageKeys.preCacheLookAhead, 3);
   const upcoming = tracks.slice(currentIndex + 1, currentIndex + 1 + lookAhead);
 
   for (const track of upcoming) {
-    await cacheTrack(track, new Set());
+    if (isStale() || generation !== getActivePreCacheGeneration()) return;
+    await cacheTrack(track, new Set(), isStale);
   }
 }
 
@@ -47,7 +56,7 @@ export async function preCacheGaplessNeighbors(
     if (isStale() || generation !== getActivePreCacheGeneration()) return;
     const track = tracks[slot.queueIndex];
     if (!track) continue;
-    await cacheTrack(track, protectedKeys);
+    await cacheTrack(track, protectedKeys, isStale);
   }
 }
 
@@ -71,6 +80,6 @@ export async function runPreCacheForPlayback(
   if (isGaplessPlaybackEnabled()) {
     await preCacheGaplessNeighbors(tracks, currentIndex, generation, stale);
   } else {
-    await preCacheUpcoming(tracks, currentIndex);
+    await preCacheUpcoming(tracks, currentIndex, generation, stale);
   }
 }

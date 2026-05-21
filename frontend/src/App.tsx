@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "@/components/layout/AppShell";
@@ -17,10 +18,14 @@ import { useThemeSync } from "@/hooks/use-theme-sync";
 import { useLibraryRefreshOnLaunch } from "@/hooks/use-library-refresh";
 import { Toaster } from "@/components/ui/sonner";
 import { PlayerProvider } from "@/contexts/player-context";
+import { bootstrapPlaybackSession } from "@/lib/playback-bootstrap";
+import { initPlaybackPersistence } from "@/stores/playback-queue-store";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 });
+
+bootstrapPlaybackSession();
 
 function AppRoutes() {
   useThemeSync();
@@ -50,6 +55,8 @@ function AppRoutes() {
 }
 
 export default function App() {
+  useEffect(() => initPlaybackPersistence(), []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
