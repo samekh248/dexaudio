@@ -47,6 +47,9 @@ export function NowPlayingPage() {
       lastErrorRef.current = null;
       return;
     }
+    if (player.error.trackId && current?.id && player.error.trackId !== current.id) {
+      return;
+    }
     const key = `${player.error.category}:${player.error.trackId}:${player.error.timestamp}`;
     if (lastErrorRef.current === key) return;
     lastErrorRef.current = key;
@@ -105,6 +108,11 @@ export function NowPlayingPage() {
       default:
         break;
     }
+  };
+
+  const handleQueueSelect = (index: number) => {
+    player.clearError();
+    setIndex(index);
   };
 
   if (!current) {
@@ -206,7 +214,7 @@ export function NowPlayingPage() {
       <QueuePanel
         items={items}
         currentIndex={displayIndex}
-        onSelect={setIndex}
+        onSelect={handleQueueSelect}
         onRemove={removeAt}
       />
     </div>

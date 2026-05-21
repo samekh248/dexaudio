@@ -181,9 +181,11 @@ export function usePlayerState() {
 
   const unload = useCallback(() => {
 
-    howlRef.current?.unload();
+    const outgoing = howlRef.current;
 
     howlRef.current = null;
+
+    outgoing?.unload();
 
     revokeBlobUrl();
 
@@ -316,6 +318,8 @@ export function usePlayerState() {
 
         onplay: () => {
 
+          if (howlRef.current !== howl) return;
+
           if (loadIdRef.current !== loadId) return;
 
           setPlaying(true);
@@ -334,6 +338,8 @@ export function usePlayerState() {
 
         onpause: () => {
 
+          if (howlRef.current !== howl) return;
+
           if (loadIdRef.current !== loadId) return;
 
           setPlaying(false);
@@ -342,6 +348,8 @@ export function usePlayerState() {
 
         onstop: () => {
 
+          if (howlRef.current !== howl) return;
+
           if (loadIdRef.current !== loadId) return;
 
           setPlaying(false);
@@ -349,6 +357,8 @@ export function usePlayerState() {
         },
 
         onend: () => {
+
+          if (howlRef.current !== howl) return;
 
           if (loadIdRef.current !== loadId) return;
 
@@ -361,6 +371,8 @@ export function usePlayerState() {
         },
 
         onload: () => {
+
+          if (howlRef.current !== howl) return;
 
           if (loadIdRef.current !== loadId) return;
 
@@ -395,6 +407,8 @@ export function usePlayerState() {
         },
 
         onloaderror: (_id, err: unknown) => {
+
+          if (howlRef.current !== howl) return;
 
           if (loadIdRef.current !== loadId) return;
 
@@ -441,6 +455,8 @@ export function usePlayerState() {
         },
 
         onplayerror: (_id, err: unknown) => {
+
+          if (howlRef.current !== howl) return;
 
           if (loadIdRef.current !== loadId) return;
 
@@ -493,16 +509,16 @@ export function usePlayerState() {
       const outgoing = howlRef.current;
       const outgoingBlob = blobUrlRef.current;
 
+      howlRef.current = staged.howl;
+
+      blobUrlRef.current = staged.blobUrl.startsWith("blob:") ? staged.blobUrl : null;
+
       if (outgoing) {
         outgoing.unload();
         if (outgoingBlob?.startsWith("blob:")) {
           URL.revokeObjectURL(outgoingBlob);
         }
       }
-
-      howlRef.current = staged.howl;
-
-      blobUrlRef.current = staged.blobUrl.startsWith("blob:") ? staged.blobUrl : null;
 
       currentTrackRef.current = staged.track;
 
