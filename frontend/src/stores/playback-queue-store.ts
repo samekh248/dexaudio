@@ -229,7 +229,15 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
   },
 
   setIndex: (index) => {
-    set({ currentIndex: index, playbackStarted: true, restorePhase: false });
+    set((s) => {
+      const indexChanged = index !== s.currentIndex;
+      return {
+        currentIndex: index,
+        playbackStarted: true,
+        restorePhase: false,
+        ...(indexChanged ? { loadGeneration: s.loadGeneration + 1 } : {}),
+      };
+    });
     schedulePersist(get);
   },
 

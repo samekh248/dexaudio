@@ -6,11 +6,10 @@ import { AudioVisualizerIcon } from "@/components/layout/AudioVisualizerIcon";
 import { usePlayer } from "@/contexts/player-context";
 
 const nav = [
-  { to: "/", label: "Library" },
   { to: "/now-playing", label: "Now Playing" },
+  { to: "/", label: "Library" },
   { to: "/stats", label: "Stats" },
   { to: "/collection", label: "Collection" },
-  { to: "/settings", label: "Settings" },
 ];
 
 export function AppShell() {
@@ -20,13 +19,11 @@ export function AppShell() {
   return (
     <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden">
       <header className="border-b border-border bg-card/50 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3">
-          <Link to="/" className="text-lg font-bold tracking-tight">
+        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+          <Link to="/" className="shrink-0 text-lg font-bold tracking-tight">
             Dexaudio
           </Link>
-          <div className="flex flex-wrap items-center gap-3">
-          <AccountWidget />
-          <nav className="flex flex-wrap gap-1">
+          <nav className="flex flex-1 flex-wrap items-center gap-1">
             {nav.map((item) => (
               <Link
                 key={item.to}
@@ -47,7 +44,7 @@ export function AppShell() {
               </Link>
             ))}
           </nav>
-          </div>
+          <AccountWidget />
         </div>
       </header>
       <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col px-4 py-6">

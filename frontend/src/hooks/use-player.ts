@@ -659,7 +659,7 @@ export function usePlayerState() {
 
 
 
-  const tryHandoffForward = useCallback(() => {
+  const tryHandoffForward = useCallback((expectedTrack?: Track) => {
 
     if (!isGaplessPlaybackEnabled()) return false;
 
@@ -668,6 +668,14 @@ export function usePlayerState() {
     if (!staged) {
 
       if (import.meta.env.DEV) console.debug("[gapless] forward miss: no staged track");
+
+      return false;
+
+    }
+
+    if (expectedTrack && staged.track.id !== expectedTrack.id) {
+
+      if (import.meta.env.DEV) console.debug("[gapless] forward miss: staged track mismatch");
 
       return false;
 
@@ -689,13 +697,15 @@ export function usePlayerState() {
 
 
 
-  const tryHandoffBackward = useCallback(() => {
+  const tryHandoffBackward = useCallback((expectedTrack?: Track) => {
 
     if (!isGaplessPlaybackEnabled()) return false;
 
     const staged = stagedBackwardRef.current;
 
     if (!staged) return false;
+
+    if (expectedTrack && staged.track.id !== expectedTrack.id) return false;
 
     if (!promoteStaged(staged, onEndRef.current)) return false;
 
