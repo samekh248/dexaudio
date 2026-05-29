@@ -160,3 +160,45 @@ body {
     transform: scaleY(0.65);
   }
 }
+
+@keyframes album-cover-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes album-cover-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.album-cover-reveal {
+  animation: album-cover-reveal 300ms ease-out forwards;
+}
+
+.album-cover-reveal--fade-only {
+  animation: album-cover-fade-in 300ms ease-out forwards;
+}
+
+.album-cover-reveal-sync {
+  animation: album-cover-fade-in 300ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .album-cover-reveal {
+    animation-name: album-cover-fade-in;
+  }
+}

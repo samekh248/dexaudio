@@ -24,10 +24,10 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 **Purpose**: Branch verification and test scaffolding before cover-reveal work.
 
-- [ ] T001 Verify branch `011-album-cover-load-animation` is checked out and `specs/011-album-cover-load-animation/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
-- [ ] T002 [P] Run `cd frontend && npm test` — confirm green baseline before cover animation changes
-- [ ] T003 [P] Create `frontend/tests/unit/use-album-cover-load.test.ts` with Vitest imports and empty describe blocks for phase transitions
-- [ ] T004 [P] Create `frontend/tests/unit/AlbumCoverImage.test.tsx` with Vitest + RTL imports and empty describe blocks
+- [X] T001 Verify branch `011-album-cover-load-animation` is checked out and `specs/011-album-cover-load-animation/plan.md` is the active plan in `.cursor/rules/specify-rules.mdc`
+- [X] T002 [P] Run `cd frontend && npm test` — confirm green baseline before cover animation changes
+- [X] T003 [P] Create `frontend/tests/unit/use-album-cover-load.test.ts` with Vitest imports and empty describe blocks for phase transitions
+- [X] T004 [P] Create `frontend/tests/unit/AlbumCoverImage.test.tsx` with Vitest + RTL imports and empty describe blocks
 
 ---
 
@@ -37,12 +37,12 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 **⚠️ CRITICAL**: US1–US4 depend on `use-album-cover-load.ts`, `AlbumCoverImage.tsx`, and reveal keyframes in `themes.css`.
 
-- [ ] T005 Add `@keyframes album-cover-reveal`, `album-cover-fade-in`, `.album-cover-reveal`, `.album-cover-reveal--fade-only`, and `.album-cover-reveal-sync` classes with `@media (prefers-reduced-motion: reduce)` override in `frontend/src/styles/themes.css` per [contracts/ui-album-cover-reveal.md](./contracts/ui-album-cover-reveal.md) (~300ms, 6px bounce)
-- [ ] T006 Create `frontend/src/hooks/use-album-cover-load.ts` — export `CoverLoadPhase`, session `REVEALED_URL_CACHE` Set, 10s timeout, mount-time `img.complete` check, phases `pending | revealing | revealed | failed | absent` per [data-model.md](./data-model.md)
-- [ ] T007 Create `frontend/src/components/albums/AlbumCoverImage.tsx` — empty slot while pending, hidden `<img>` until load, fallback for absent/failed, apply reveal class on `revealing`, optional `onPhaseChange` callback per [contracts/ui-album-cover-reveal.md](./contracts/ui-album-cover-reveal.md)
-- [ ] T008 Add `revealComplete?: boolean` prop (default `true`) to `frontend/src/components/albums/PlayAlbumOverlay.tsx` — when `false`, force `pointer-events-none opacity-0` regardless of group hover (FR-009)
-- [ ] T009 [P] Unit tests in `frontend/tests/unit/use-album-cover-load.test.ts` — `pending → revealing → revealed` on load, cached URL skip via Set, `absent` when no URL
-- [ ] T010 [P] Component tests in `frontend/tests/unit/AlbumCoverImage.test.tsx` — empty slot while pending, no visible partial image, fallback for absent URL
+- [X] T005 Add `@keyframes album-cover-reveal`, `album-cover-fade-in`, `.album-cover-reveal`, `.album-cover-reveal--fade-only`, and `.album-cover-reveal-sync` classes with `@media (prefers-reduced-motion: reduce)` override in `frontend/src/styles/themes.css` per [contracts/ui-album-cover-reveal.md](./contracts/ui-album-cover-reveal.md) (~300ms, 6px bounce)
+- [X] T006 Create `frontend/src/hooks/use-album-cover-load.ts` — export `CoverLoadPhase`, session `REVEALED_URL_CACHE` Set, 10s timeout, mount-time `img.complete` check, phases `pending | revealing | revealed | failed | absent` per [data-model.md](./data-model.md)
+- [X] T007 Create `frontend/src/components/albums/AlbumCoverImage.tsx` — empty slot while pending, hidden `<img>` until load, fallback for absent/failed, apply reveal class on `revealing`, optional `onPhaseChange` callback per [contracts/ui-album-cover-reveal.md](./contracts/ui-album-cover-reveal.md)
+- [X] T008 Add `revealComplete?: boolean` prop (default `true`) to `frontend/src/components/albums/PlayAlbumOverlay.tsx` — when `false`, force `pointer-events-none opacity-0` regardless of group hover (FR-009)
+- [X] T009 [P] Unit tests in `frontend/tests/unit/use-album-cover-load.test.ts` — `pending → revealing → revealed` on load, cached URL skip via Set, `absent` when no URL
+- [X] T010 [P] Component tests in `frontend/tests/unit/AlbumCoverImage.test.tsx` — empty slot while pending, no visible partial image, fallback for absent URL
 
 **Checkpoint**: Hook and `AlbumCoverImage` pass T009–T010 in isolation; CSS classes defined.
 
@@ -56,11 +56,11 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 ### Tests for User Story 1
 
-- [ ] T011 [P] [US1] Extend `frontend/tests/unit/AlbumCard.test.tsx` — title/artist hidden while pending, visible after reveal; play overlay not hover-visible until `revealComplete`
+- [X] T011 [P] [US1] Extend `frontend/tests/unit/AlbumCard.test.tsx` — title/artist hidden while pending, visible after reveal; play overlay not hover-visible until `revealComplete`
 
 ### Implementation for User Story 1
 
-- [ ] T012 [US1] Refactor `frontend/src/components/albums/AlbumCard.tsx` — replace inline `<img>` with `AlbumCoverImage`, wire `onPhaseChange` to gate `CardContent` opacity via `.album-cover-reveal-sync`, pass `revealComplete` to `PlayAlbumOverlay` (FR-001–FR-005, FR-012)
+- [X] T012 [US1] Refactor `frontend/src/components/albums/AlbumCard.tsx` — replace inline `<img>` with `AlbumCoverImage`, wire `onPhaseChange` to gate `CardContent` opacity via `.album-cover-reveal-sync`, pass `revealComplete` to `PlayAlbumOverlay` (FR-001–FR-005, FR-012)
 
 **Checkpoint**: Albums home group rows show wait-then-reveal on `AlbumCard`; T011 passes; no partial images under throttled network.
 
@@ -74,8 +74,8 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 ### Implementation for User Story 2
 
-- [ ] T013 [P] [US2] Refactor `frontend/src/components/albums/AlbumGrid.tsx` — use `AlbumCoverImage`, sync title/artist visibility, gate `PlayAlbumOverlay` with `revealComplete` (mirror `AlbumCard` pattern)
-- [ ] T014 [P] [US2] Refactor `frontend/src/components/albums/ArtistSpotlightTile.tsx` — replace stack layer `<img>` elements with `AlbumCoverImage`; keep artist name/album count in `CardContent` visible immediately per [research.md](./research.md) §6 (FR-006)
+- [X] T013 [P] [US2] Refactor `frontend/src/components/albums/AlbumGrid.tsx` — use `AlbumCoverImage`, sync title/artist visibility, gate `PlayAlbumOverlay` with `revealComplete` (mirror `AlbumCard` pattern)
+- [X] T014 [P] [US2] Refactor `frontend/src/components/albums/ArtistSpotlightTile.tsx` — replace stack layer `<img>` elements with `AlbumCoverImage`; keep artist name/album count in `CardContent` visible immediately per [research.md](./research.md) §6 (FR-006)
 
 **Checkpoint**: Browse-all and category grids match home card behavior; spotlight stack layers reveal independently; artist metadata always visible.
 
@@ -89,12 +89,12 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 ### Tests for User Story 3
 
-- [ ] T015 [P] [US3] Extend `frontend/tests/unit/use-album-cover-load.test.ts` — `onError → failed`, 10s timeout → failed, URL added to cache only on successful reveal (not on failed)
-- [ ] T016 [P] [US3] Extend `frontend/tests/unit/AlbumCoverImage.test.tsx` — failed/timeout shows fallback immediately without reveal class; title parent receives `revealComplete` true for absent/failed
+- [X] T015 [P] [US3] Extend `frontend/tests/unit/use-album-cover-load.test.ts` — `onError → failed`, 10s timeout → failed, URL added to cache only on successful reveal (not on failed)
+- [X] T016 [P] [US3] Extend `frontend/tests/unit/AlbumCoverImage.test.tsx` — failed/timeout shows fallback immediately without reveal class; title parent receives `revealComplete` true for absent/failed
 
 ### Implementation for User Story 3
 
-- [ ] T017 [US3] Harden error/timeout paths in `frontend/src/hooks/use-album-cover-load.ts` and `frontend/src/components/albums/AlbumCoverImage.tsx` — ensure `AlbumCard` and `AlbumGrid` show title/artist and enable play overlay immediately when phase is `absent` or `failed` (FR-007, FR-008)
+- [X] T017 [US3] Harden error/timeout paths in `frontend/src/hooks/use-album-cover-load.ts` and `frontend/src/components/albums/AlbumCoverImage.tsx` — ensure `AlbumCard` and `AlbumGrid` show title/artist and enable play overlay immediately when phase is `absent` or `failed` (FR-007, FR-008)
 
 **Checkpoint**: Missing and failed art never leave permanent empty slots; T015–T016 pass.
 
@@ -108,12 +108,12 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 ### Tests for User Story 4
 
-- [ ] T018 [P] [US4] Extend `frontend/tests/unit/use-album-cover-load.test.ts` — mock `matchMedia('(prefers-reduced-motion: reduce)')` returns `true`, assert fade-only class selected (no bounce transform class)
-- [ ] T019 [P] [US4] Extend `frontend/tests/unit/AlbumCoverImage.test.tsx` — reduced-motion path applies `.album-cover-reveal--fade-only` not full bounce class
+- [X] T018 [P] [US4] Extend `frontend/tests/unit/use-album-cover-load.test.ts` — mock `matchMedia('(prefers-reduced-motion: reduce)')` returns `true`, assert fade-only class selected (no bounce transform class)
+- [X] T019 [P] [US4] Extend `frontend/tests/unit/AlbumCoverImage.test.tsx` — reduced-motion path applies `.album-cover-reveal--fade-only` not full bounce class
 
 ### Implementation for User Story 4
 
-- [ ] T020 [US4] Verify `frontend/src/styles/themes.css` reduced-motion media query disables translate on `.album-cover-reveal` and that `use-album-cover-load.ts` selects fade-only variant when preference detected (FR-010, SC-005)
+- [X] T020 [US4] Verify `frontend/src/styles/themes.css` reduced-motion media query disables translate on `.album-cover-reveal` and that `use-album-cover-load.ts` selects fade-only variant when preference detected (FR-010, SC-005)
 
 **Checkpoint**: Reduced motion shows fade only; T018–T019 pass.
 
@@ -123,8 +123,8 @@ description: "Task list for feature 011 — Album Cover Load Animation"
 
 **Purpose**: Full regression, re-render stability, manual validation.
 
-- [ ] T021 [P] Add test in `frontend/tests/unit/use-album-cover-load.test.ts` — URL in `REVEALED_URL_CACHE` on remount skips animation (FR-011)
-- [ ] T022 Run `cd frontend && npm test` — full frontend suite green
+- [X] T021 [P] Add test in `frontend/tests/unit/use-album-cover-load.test.ts` — URL in `REVEALED_URL_CACHE` on remount skips animation (FR-011)
+- [X] T022 Run `cd frontend && npm test` — full frontend suite green
 - [ ] T023 Execute manual checklist in `specs/011-album-cover-load-animation/quickstart.md` (throttled network, missing art, reduced motion, re-render stability, zero CLS)
 - [ ] T024 [P] Fix any test or implementation gaps found during T023; update `quickstart.md` only if steps diverge from actual UI
 

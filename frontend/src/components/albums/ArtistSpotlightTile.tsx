@@ -3,6 +3,7 @@ import type { ArtistSpotlight } from "@dexaudio/shared-types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
+import { AlbumCoverImage } from "./AlbumCoverImage";
 import { usePlayArtist } from "@/hooks/use-play-artist";
 
 interface ArtistSpotlightTileProps {
@@ -29,13 +30,7 @@ export function ArtistSpotlightTile({ spotlight }: ArtistSpotlightTileProps) {
               zIndex: i + 1,
             }}
           >
-            {url ? (
-              <img src={url} alt="" className="h-full w-full object-cover" loading="lazy" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center bg-muted text-[10px]">
-                —
-              </div>
-            )}
+            <AlbumCoverImage artUrl={url} fallbackLabel="—" />
           </div>
         ))}
         <Button
