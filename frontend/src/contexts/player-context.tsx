@@ -37,6 +37,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const onTrackEndRef = useRef(onTrackEnd);
   onTrackEndRef.current = onTrackEnd;
+  const syncedGenerationRef = useRef(loadGeneration);
 
   const startPlaybackFromRestore = useCallback(async () => {
     const track = getQueueCurrentTrack(usePlaybackQueue.getState());
@@ -67,9 +68,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!current || restorePhase) return;
-    if (player.getActiveTrackId() === current.id) return;
+
+    const prevGeneration = syncedGenerationRef.current;
+    const generationChanged = prevGeneration !== loadGeneration;
+    syncedGenerationRef.current = loadGeneration;
+
+    const activeId = player.getActiveTrackId();
+    if (activeId === current.id) {
+      if (generationChanged) {
+        player.seek(0);
+      }
+      return;
+    }
+
     void player.loadTrack(current, () => onTrackEndRef.current());
-  }, [current?.id, loadGeneration, player.loadTrack, player.getActiveTrackId, restorePhase]);
+  }, [current?.id, currentIndex, loadGeneration, player.loadTrack, player.getActiveTrackId, player.seek, restorePhase]);
 
   useEffect(() => {
     if (!current || player.loading || !player.playing) return;

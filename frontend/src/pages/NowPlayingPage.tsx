@@ -58,6 +58,9 @@ export function NowPlayingPage() {
 
     if (isSessionLevelError(player.error.category)) return;
 
+    // Don't auto-advance when a selected track failed before playback started.
+    if (!player.playing && player.position < 1000) return;
+
     const parts = [
       [player.error.trackTitle, player.error.trackArtist].filter(Boolean).join(" — "),
       player.error.technicalDetail,
@@ -111,7 +114,23 @@ export function NowPlayingPage() {
   };
 
   const handleQueueSelect = (index: number) => {
+    if (index === currentIndex) return;
+
     player.clearError();
+
+    const targetTrack = items[index]?.track;
+    if (targetTrack && isGaplessPlaybackEnabled()) {
+      if (index === currentIndex + 1 && player.tryHandoffForward(targetTrack)) {
+        setIndex(index);
+        return;
+      }
+      if (index === currentIndex - 1 && player.tryHandoffBackward(targetTrack)) {
+        setIndex(index);
+        return;
+      }
+    }
+
+    player.cancelStagedPreloads();
     setIndex(index);
   };
 
@@ -191,7 +210,7 @@ export function NowPlayingPage() {
           onVolume={player.setVolume}
           onNext={() => {
             const nextTrack = items[currentIndex + 1]?.track;
-            if (isGaplessPlaybackEnabled() && nextTrack && player.tryHandoffForward()) {
+            if (isGaplessPlaybackEnabled() && nextTrack && player.tryHandoffForward(nextTrack)) {
               next();
               return;
             }
@@ -203,7 +222,7 @@ export function NowPlayingPage() {
               return;
             }
             const prevTrack = items[currentIndex - 1]?.track;
-            if (isGaplessPlaybackEnabled() && prevTrack && player.tryHandoffBackward()) {
+            if (isGaplessPlaybackEnabled() && prevTrack && player.tryHandoffBackward(prevTrack)) {
               previous();
               return;
             }

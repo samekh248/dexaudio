@@ -85,6 +85,21 @@ describe("playback queue store", () => {
     expect(usePlaybackQueue.getState().currentIndex).toBe(2);
   });
 
+  it("bumps load generation when queue index changes", () => {
+    usePlaybackQueue.getState().addToQueue([track("1"), track("2"), track("3")]);
+    const before = usePlaybackQueue.getState().loadGeneration;
+    usePlaybackQueue.getState().setIndex(2);
+    expect(usePlaybackQueue.getState().loadGeneration).toBe(before + 1);
+  });
+
+  it("does not bump load generation when selecting the current index", () => {
+    usePlaybackQueue.getState().addToQueue([track("1"), track("2")]);
+    usePlaybackQueue.getState().setIndex(1);
+    const generation = usePlaybackQueue.getState().loadGeneration;
+    usePlaybackQueue.getState().setIndex(1);
+    expect(usePlaybackQueue.getState().loadGeneration).toBe(generation);
+  });
+
   it("clears auto items", () => {
     usePlaybackQueue.setState({
       items: [
