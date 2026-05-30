@@ -15,6 +15,14 @@ vi.mock("@/services/api-client", () => ({
   api: { getAlbumTracks: vi.fn() },
 }));
 
+vi.mock("@/lib/local-storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/local-storage")>();
+  return {
+    ...actual,
+    getPlayNavigationMode: () => "navigate" as const,
+  };
+});
+
 describe("usePlayAlbum", () => {
   beforeEach(() => {
     vi.clearAllMocks();
