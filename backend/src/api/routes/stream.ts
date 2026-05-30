@@ -20,6 +20,35 @@ function isPlayableContentType(contentType: string): boolean {
   return ct.includes("audio") || ct.includes("octet-stream") || ct.includes("mpeg");
 }
 
+/**
+ * Only forward a client Range for a genuine seek (non-zero start byte).
+ *
+ * Browsers send `Range: bytes=0-` on the initial media load. Forwarding that to
+ * Plex (especially a transcode session) yields a 206 whose Content-Range total
+ * is an unreliable estimate, which makes the browser stop playback partway
+ * through the track. Treating whole-file requests as a normal full 200 response
+ * avoids that while still honoring real seeks (`bytes=N-`, N > 0).
+ */
+export function rangeStartByte(rangeHeader: string | undefined): number {
+  if (!rangeHeader) return 0;
+  const match = /^bytes=(\d+)-/.exec(rangeHeader.trim());
+  return match ? Number(match[1]) : 0;
+}
+
+/**
+ * A request is a genuine seek only when it asks for a non-zero start byte.
+ *
+ * For the initial full load we must stream the body as a plain 200 with no
+ * Content-Length so the browser plays to the real end of the (possibly
+ * transcoded) stream. Plex's transcode Content-Length is an unreliable
+ * estimate; echoing it makes the browser stop a few seconds in and fire
+ * `ended`, which auto-advances the queue. Only honor upstream
+ * status/Content-Range/Content-Length for real seeks.
+ */
+export function isSeekRequest(rangeHeader: string | undefined): boolean {
+  return rangeStartByte(rangeHeader) > 0;
+}
+
 async function proxyStream(
   config: PlexConfig,
   streamUrl: string,
@@ -73,6 +102,8 @@ export async function streamRoutes(app: FastifyInstance) {
     const { trackId } = z.object({ trackId: z.string() }).parse(request.params);
     const rangeHeaderRaw = request.headers.range;
     const rangeHeader = Array.isArray(rangeHeaderRaw) ? rangeHeaderRaw[0] : rangeHeaderRaw;
+    const seeking = isSeekRequest(rangeHeader);
+    const seekRange = seeking ? rangeHeader : undefined;
     const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
     if (!config) throw new NotFoundError("Plex not connected");
 
@@ -96,7 +127,7 @@ export async function streamRoutes(app: FastifyInstance) {
     }
 
     for (const streamUrl of streamUrls) {
-      const result = await proxyStream(config, streamUrl, rangeHeader);
+      const result = await proxyStream(config, streamUrl, seekRange);
       if (!result.ok) {
         if (result.status === 401) {
           throw new AppError(
@@ -111,12 +142,18 @@ export async function streamRoutes(app: FastifyInstance) {
         }
         continue;
       }
-      reply.code(result.status);
       reply.header("content-type", result.contentType);
       reply.header("accept-ranges", "bytes");
       reply.header("cache-control", "no-store");
-      if (result.contentRange) reply.header("content-range", result.contentRange);
-      if (result.contentLength) reply.header("content-length", result.contentLength);
+      // Only echo partial-response metadata for real seeks. On the initial full
+      // load we send a plain 200 with no Content-Length so the browser streams
+      // to the true end of the (possibly transcoded) audio instead of stopping
+      // at Plex's estimated length and firing a premature `ended`.
+      if (seeking) {
+        reply.code(result.status);
+        if (result.contentRange) reply.header("content-range", result.contentRange);
+        if (result.contentLength) reply.header("content-length", result.contentLength);
+      }
       return reply.send(result.body);
     }
 

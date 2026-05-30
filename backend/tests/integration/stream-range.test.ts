@@ -1,47 +1,39 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
+import { isSeekRequest, rangeStartByte } from "../../src/api/routes/stream.js";
 
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
-
-describe("stream range proxy", () => {
-  beforeEach(() => {
-    mockFetch.mockReset();
+describe("stream range guard", () => {
+  it("treats a missing Range as a full-body (200) request", () => {
+    expect(rangeStartByte(undefined)).toBe(0);
   });
 
-  it("forwards Range header to upstream", async () => {
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      status: 206,
-      headers: {
-        get: (name: string) => {
-          const map: Record<string, string> = {
-            "content-type": "audio/mpeg",
-            "content-range": "bytes 0-1023/2048",
-            "content-length": "1024",
-          };
-          return map[name.toLowerCase()] ?? null;
-        },
-      },
-      body: new ReadableStream(),
-    });
+  it("treats a whole-file Range (bytes=0-) as a full-body request", () => {
+    // Browsers send this on initial media load; forwarding it caused premature
+    // end-of-track on transcoded Plex streams.
+    expect(rangeStartByte("bytes=0-")).toBe(0);
+    expect(rangeStartByte("  bytes=0-  ")).toBe(0);
+  });
 
-    const { proxyStreamForTest } = await import("../../src/api/routes/stream-test-utils.js").catch(
-      () => ({ proxyStreamForTest: null }),
-    );
+  it("reports the start byte for a genuine seek so the Range is forwarded", () => {
+    expect(rangeStartByte("bytes=1048576-")).toBe(1048576);
+    expect(rangeStartByte("bytes=500-999")).toBe(500);
+  });
 
-    if (!proxyStreamForTest) {
-      const headers: Record<string, string> = { Authorization: "token" };
-      const range = "bytes=0-1023";
-      headers.Range = range;
-      await fetch("http://plex/stream", { headers });
-      expect(mockFetch).toHaveBeenCalledWith(
-        "http://plex/stream",
-        expect.objectContaining({ headers: expect.objectContaining({ Range: range }) }),
-      );
-      return;
-    }
+  it("ignores malformed Range headers", () => {
+    expect(rangeStartByte("bytes=-500")).toBe(0);
+    expect(rangeStartByte("garbage")).toBe(0);
+  });
+});
 
-    await proxyStreamForTest({ token: "t" } as never, "http://plex/stream", "bytes=0-1023");
-    expect(mockFetch.mock.calls[0][1].headers.Range).toBe("bytes=0-1023");
+describe("isSeekRequest", () => {
+  it("treats the initial full load as a non-seek so no Content-Length is echoed", () => {
+    // A non-seek must stream to EOF; echoing Plex's estimated Content-Length on
+    // a transcode makes the browser stop early and skip to the next track.
+    expect(isSeekRequest(undefined)).toBe(false);
+    expect(isSeekRequest("bytes=0-")).toBe(false);
+  });
+
+  it("treats a non-zero start byte as a genuine seek (206 metadata forwarded)", () => {
+    expect(isSeekRequest("bytes=1048576-")).toBe(true);
+    expect(isSeekRequest("bytes=500-999")).toBe(true);
   });
 });

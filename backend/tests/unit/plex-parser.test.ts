@@ -81,6 +81,11 @@ describe("plex-parser", () => {
     expect(getStreamUrl(config, "42")).toContain("/library/metadata/42/file");
     expect(getTranscodeUrl(config, "42", 192)).toContain("musicBitrate=192");
     expect(getTranscodeUrl(config, "42")).toContain("maxAudioBitrate=320");
+    expect(new URL(getTranscodeUrl(config, "42")).searchParams.get("session")).toContain("-42");
+    expect(new URL(getTranscodeUrl(config, "43")).searchParams.get("session")).toContain("-43");
+    expect(new URL(getTranscodeUrl(config, "42")).searchParams.get("session")).not.toBe(
+      new URL(getTranscodeUrl(config, "43")).searchParams.get("session"),
+    );
     expect(proxyArtUrl("/library/metadata/1/thumb")).toContain(
       "/api/v1/plex/photo?path=%2Flibrary%2Fmetadata%2F1%2Fthumb",
     );

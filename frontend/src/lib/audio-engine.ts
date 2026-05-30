@@ -13,6 +13,8 @@ export interface AudioEngineEvents {
 
 export interface AudioEngine {
   load(src: string, formatHints: string[], events: AudioEngineEvents): void;
+  /** Rebind the event handlers on an already-loaded engine (used on staged handoff). */
+  setEvents(events: AudioEngineEvents): void;
   play(): void;
   pause(): void;
   stop(): void;
@@ -101,6 +103,10 @@ export function createHowlerAudioEngine(): AudioEngine {
           events?.onError(typeof err === "number" || typeof err === "string" ? err : 4);
         },
       });
+    },
+
+    setEvents(ev: AudioEngineEvents) {
+      events = ev;
     },
 
     play() {
