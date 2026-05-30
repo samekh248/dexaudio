@@ -7,6 +7,7 @@ import { AudioPlayer } from "@/components/player/AudioPlayer";
 import { PlaybackErrorBanner } from "@/components/player/PlaybackErrorBanner";
 import { QueuePanel } from "@/components/queue/QueuePanel";
 import { prefetchSimilarIfNeeded } from "@/lib/auto-queue";
+import { usePlaybackControls } from "@/hooks/use-playback-controls";
 import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
 import { isSessionLevelError } from "@/lib/playback-errors";
 import { toast } from "@/components/ui/sonner";
@@ -21,7 +22,6 @@ export function NowPlayingPage() {
     currentIndex,
     skippedIndices,
     next,
-    previous,
     setIndex,
     removeAt,
     addAutoTracks,
@@ -29,6 +29,7 @@ export function NowPlayingPage() {
     resetSkipped,
   } = usePlaybackQueue();
   const player = usePlayer();
+  const { toggle, next: goNext, previous: goPrevious } = usePlaybackControls();
   const playbackStarted = usePlaybackQueue((s) => s.playbackStarted);
   const current = usePlaybackQueue(getQueueCurrentTrack);
   const displayIndex = playbackStarted ? currentIndex : -1;
@@ -196,38 +197,12 @@ export function NowPlayingPage() {
           volume={player.volume}
           fromCache={player.fromCache}
           loading={player.loading}
-          onPlay={() => {
-            if (player.autoplayBlocked) {
-              player.resumeAutoplay();
-            } else if (player.playing) {
-              player.pause();
-            } else {
-              player.play();
-            }
-          }}
+          onPlay={toggle}
           onPause={player.pause}
           onSeek={player.seek}
           onVolume={player.setVolume}
-          onNext={() => {
-            const nextTrack = items[currentIndex + 1]?.track;
-            if (isGaplessPlaybackEnabled() && nextTrack && player.tryHandoffForward(nextTrack)) {
-              next();
-              return;
-            }
-            player.fadeOut(() => next());
-          }}
-          onPrevious={() => {
-            if (currentIndex === 0 && player.playing) {
-              player.seek(0);
-              return;
-            }
-            const prevTrack = items[currentIndex - 1]?.track;
-            if (isGaplessPlaybackEnabled() && prevTrack && player.tryHandoffBackward(prevTrack)) {
-              previous();
-              return;
-            }
-            previous();
-          }}
+          onNext={goNext}
+          onPrevious={goPrevious}
         />
       </div>
       <QueuePanel

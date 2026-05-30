@@ -1,8 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Play } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AccountWidget } from "@/components/layout/AccountWidget";
-import { AudioVisualizerIcon } from "@/components/layout/AudioVisualizerIcon";
+import { NowPlayingNav } from "@/components/layout/NowPlayingNav";
 import { usePlayer } from "@/contexts/player-context";
 
 const mainNav = [
@@ -10,8 +9,6 @@ const mainNav = [
   { to: "/stats", label: "Stats" },
   { to: "/collection", label: "Collection" },
 ];
-
-const nowPlayingNav = { to: "/now-playing", label: "Now Playing" };
 
 function navLinkClass(isActive: boolean) {
   return cn(
@@ -38,17 +35,11 @@ export function AppShell() {
               </Link>
             ))}
           </nav>
-          <Link
-            to={nowPlayingNav.to}
-            className={navLinkClass(location.pathname === nowPlayingNav.to)}
-          >
-            {playing ? (
-              <AudioVisualizerIcon />
-            ) : (
-              <Play className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            )}
-            {nowPlayingNav.label}
-          </Link>
+          <NowPlayingNav
+            isActive={location.pathname === "/now-playing"}
+            playing={playing}
+            navLinkClass={navLinkClass}
+          />
           <AccountWidget />
         </div>
       </header>
