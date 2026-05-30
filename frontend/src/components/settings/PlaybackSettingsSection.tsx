@@ -32,9 +32,7 @@ export function PlaybackSettingsSection() {
   const [playNavigation, setPlayNavigation] = useState<PlayNavigationMode>(getPlayNavigationMode());
   const [autoQueue, setAutoQueue] = useState(getItem(StorageKeys.autoQueueSimilar, true));
   const transition = usePlaybackPrefs((s) => s.transition);
-  const crossfadeDurationSec = usePlaybackPrefs((s) => s.crossfadeDurationSec);
   const setTransition = usePlaybackPrefs((s) => s.setTransition);
-  const setCrossfadeDuration = usePlaybackPrefs((s) => s.setCrossfadeDuration);
   const [preCache, setPreCache] = useState(getItem(StorageKeys.preCacheLookAhead, 3));
 
   const trackTransition = transition;

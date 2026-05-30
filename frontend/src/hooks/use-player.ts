@@ -30,7 +30,11 @@ import {
   streamUrlForTrack,
 } from "@/lib/stream-audio.js";
 
-import { createHowlerAudioEngine, type AudioEngine } from "@/lib/audio-engine.js";
+import {
+  createHowlerAudioEngine,
+  type AudioEngine,
+  type AudioEngineEvents,
+} from "@/lib/audio-engine.js";
 import {
   initialPlaybackMachineState,
   isLoadingIndicatorStatus,
@@ -49,7 +53,9 @@ import { getTransitionStyle, usePlaybackPrefs } from "@/lib/playback-prefs-store
 type StagedPlayback = {
   track: Track;
   engine: AudioEngine;
-  blobUrl: string;
+  src: string;
+  fromCache: boolean;
+  useLiveOnCacheError: boolean;
 };
 
 export type LoadTrackOptions = {
@@ -187,7 +193,10 @@ export function usePlayerState() {
           return { src: blobUrlForTrack(track, cached), fromCache: true, useLiveOnCacheError: true };
         }
         if (stagedGenRef.current !== stagedGen) return null;
-        return { src: streamUrlForTrack(track.id), fromCache: false, useLiveOnCacheError: false };
+        // Staged preloading must not open a second live Plex stream while the
+        // active uncached track is playing. Plex transcodes are sensitive to
+        // overlapping requests and can prematurely end the current stream.
+        return null;
       } catch {
         return null;
       }
@@ -210,7 +219,7 @@ export function usePlayerState() {
   );
 
   const handleTerminalFailure = useCallback(
-    (track: Track, failure: PlaybackFailure, loadId: number) => {
+    (_track: Track, failure: PlaybackFailure, loadId: number) => {
       if (loadIdRef.current !== loadId) return;
       applyMachine(
         reducePlaybackMachine(machineRef.current, {
@@ -225,6 +234,95 @@ export function usePlayerState() {
     [applyMachine],
   );
 
+  const makeEngineEvents = useCallback(
+    (
+      track: Track,
+      src: string,
+      loadId: number,
+      useLiveOnCacheError: boolean,
+      onEnd: (() => void) | undefined,
+      autoplayOnLoad: boolean,
+      engine: AudioEngine,
+    ): AudioEngineEvents => ({
+      onLoaded: (durationMs) => {
+        if (loadIdRef.current !== loadId) return;
+        setDuration(durationMs);
+        applyMachine(
+          reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: autoplayOnLoad }),
+        );
+        if (autoplayOnLoad) engine.play();
+      },
+      onPlay: () => {
+        if (loadIdRef.current !== loadId) return;
+        clearError();
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+      },
+      onPause: () => {
+        if (loadIdRef.current !== loadId) return;
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+      },
+      onEnded: () => {
+        if (loadIdRef.current !== loadId) return;
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "ENDED" }));
+        void checkAndScrobble();
+        onEnd?.();
+        onTerminalRef.current?.("ended");
+      },
+      onError: (err) => {
+        if (loadIdRef.current !== loadId) return;
+        if (isIgnorableHowlerError(err)) return;
+        if (Howler.ctx?.state === "suspended" || isAutoplayBlockedError(err)) {
+          setAutoplayBlocked(true);
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+          return;
+        }
+        if (useLiveOnCacheError && src.startsWith("blob:") && !useLiveFallbackRef.current) {
+          useLiveFallbackRef.current = true;
+          void loadTrackRef.current(track, onEnd, { skipCache: true });
+          return;
+        }
+        const failure = classifyPlaybackError("howler", err, track);
+        const attempt = machineRef.current.recovery.attempt;
+        if (failure.recoverable && retriesRemaining(attempt)) {
+          scheduleRecovery(track, loadId, onEnd);
+          return;
+        }
+        setError(failure);
+        handleTerminalFailure(track, failure, loadId);
+      },
+      onStall: () => {
+        if (loadIdRef.current !== loadId) return;
+        if (machineRef.current.status !== "playing") return;
+        applyMachine(
+          reducePlaybackMachine(machineRef.current, { type: "STALL", nowMs: Date.now() }),
+        );
+      },
+      onResume: () => {
+        if (loadIdRef.current !== loadId) return;
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "RESUME" }));
+      },
+      onProgress: (ms) => {
+        if (loadIdRef.current !== loadId) return;
+        setPosition(ms);
+        updateListenPosition(ms);
+        if (
+          machineRef.current.status === "buffering" &&
+          stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
+        ) {
+          const stallFailure = classifyStallError(track);
+          const attempt = machineRef.current.recovery.attempt;
+          if (retriesRemaining(attempt)) {
+            scheduleRecovery(track, loadId, onEnd);
+          } else {
+            setError(stallFailure);
+            handleTerminalFailure(track, stallFailure, loadId);
+          }
+        }
+      },
+    }),
+    [clearError, applyMachine, scheduleRecovery, handleTerminalFailure],
+  );
+
   const bindEngine = useCallback(
     (
       track: Track,
@@ -236,85 +334,13 @@ export function usePlayerState() {
       engine: AudioEngine,
     ) => {
       engine.setVolume(volume);
-      engine.load(src, howlerFormatsForTrack(track.format), {
-        onLoaded: (durationMs) => {
-          if (loadIdRef.current !== loadId) return;
-          setDuration(durationMs);
-          applyMachine(
-            reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: autoplayOnLoad }),
-          );
-          if (autoplayOnLoad) engine.play();
-        },
-        onPlay: () => {
-          if (loadIdRef.current !== loadId) return;
-          clearError();
-          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
-        },
-        onPause: () => {
-          if (loadIdRef.current !== loadId) return;
-          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
-        },
-        onEnded: () => {
-          if (loadIdRef.current !== loadId) return;
-          applyMachine(reducePlaybackMachine(machineRef.current, { type: "ENDED" }));
-          void checkAndScrobble();
-          onEnd?.();
-          onTerminalRef.current?.("ended");
-        },
-        onError: (err) => {
-          if (loadIdRef.current !== loadId) return;
-          if (isIgnorableHowlerError(err)) return;
-          if (Howler.ctx?.state === "suspended" || isAutoplayBlockedError(err)) {
-            setAutoplayBlocked(true);
-            applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
-            return;
-          }
-          if (useLiveOnCacheError && src.startsWith("blob:") && !useLiveFallbackRef.current) {
-            useLiveFallbackRef.current = true;
-            void loadTrackRef.current(track, onEnd, { skipCache: true });
-            return;
-          }
-          const failure = classifyPlaybackError("howler", err, track);
-          const attempt = machineRef.current.recovery.attempt;
-          if (failure.recoverable && retriesRemaining(attempt)) {
-            scheduleRecovery(track, loadId, onEnd);
-            return;
-          }
-          setError(failure);
-          handleTerminalFailure(track, failure, loadId);
-        },
-        onStall: () => {
-          if (loadIdRef.current !== loadId) return;
-          if (machineRef.current.status !== "playing") return;
-          applyMachine(
-            reducePlaybackMachine(machineRef.current, { type: "STALL", nowMs: Date.now() }),
-          );
-        },
-        onResume: () => {
-          if (loadIdRef.current !== loadId) return;
-          applyMachine(reducePlaybackMachine(machineRef.current, { type: "RESUME" }));
-        },
-        onProgress: (ms) => {
-          if (loadIdRef.current !== loadId) return;
-          setPosition(ms);
-          updateListenPosition(ms);
-          if (
-            machineRef.current.status === "buffering" &&
-            stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
-          ) {
-            const stallFailure = classifyStallError(track);
-            const attempt = machineRef.current.recovery.attempt;
-            if (retriesRemaining(attempt)) {
-              scheduleRecovery(track, loadId, onEnd);
-            } else {
-              setError(stallFailure);
-              handleTerminalFailure(track, stallFailure, loadId);
-            }
-          }
-        },
-      });
+      engine.load(
+        src,
+        howlerFormatsForTrack(track.format),
+        makeEngineEvents(track, src, loadId, useLiveOnCacheError, onEnd, autoplayOnLoad, engine),
+      );
     },
-    [volume, clearError, applyMachine, scheduleRecovery, handleTerminalFailure],
+    [volume, makeEngineEvents],
   );
 
   const promoteStaged = useCallback(
@@ -324,12 +350,27 @@ export function usePlayerState() {
       const outgoing = engineRef.current;
       engineRef.current = staged.engine;
       outgoing.destroy();
+      clearRecoveryTimer();
 
+      // New load generation so any stale events from the outgoing engine are
+      // ignored and the promoted engine's handlers are authoritative.
+      const loadId = ++loadIdRef.current;
+      useLiveFallbackRef.current = false;
+      onEndRef.current = onEnd;
       currentTrackRef.current = staged.track;
       startListening(staged.track);
       clearError();
-      setFromCache(staged.blobUrl.startsWith("blob:"));
+      setFromCache(staged.fromCache);
       setDuration(staged.engine.getDurationMs());
+
+      // Replace the lightweight preload stubs with the full lifecycle handlers
+      // (stall recovery, guarded terminal advance, progress) bound to this load.
+      staged.engine.setEvents(
+        makeEngineEvents(staged.track, staged.src, loadId, staged.useLiveOnCacheError, onEnd, false, staged.engine),
+      );
+
+      // Reset recovery/position so the promoted track starts a fresh lifecycle.
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOAD" }));
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: false }));
 
       if (crossfade && transitionStyle === "crossfade") {
@@ -346,16 +387,21 @@ export function usePlayerState() {
         setPosition(0);
       }
 
-      if (import.meta.env.DEV) {
-        console.debug("[transition] handoff", staged.track.id);
-      }
       return true;
     },
-    [volume, clearError, applyMachine, transitionStyle, crossfadeDurationSec],
+    [
+      volume,
+      clearError,
+      applyMachine,
+      transitionStyle,
+      crossfadeDurationSec,
+      makeEngineEvents,
+      clearRecoveryTimer,
+    ],
   );
 
   const preloadStaged = useCallback(
-    async (track: Track, direction: "forward" | "backward", onEnd?: () => void) => {
+    async (track: Track, direction: "forward" | "backward", _onEnd?: () => void) => {
       const style = getTransitionStyle();
       if (style !== "gapless" && style !== "crossfade") return;
 
@@ -372,27 +418,30 @@ export function usePlayerState() {
       if (stagedGenRef.current !== gen || !resolved) return;
 
       const engine = createHowlerAudioEngine();
-      let loadFailed = false;
+      // Lightweight stubs while buffering in the background; promoteStaged swaps
+      // in the full lifecycle handlers once this engine becomes active. A failed
+      // preload simply never reaches "loaded", so promoteStaged falls back to a
+      // normal load.
       engine.load(resolved.src, howlerFormatsForTrack(track.format), {
         onLoaded: () => {},
         onPlay: () => {},
         onPause: () => {},
-        onEnded: () => onEnd?.(),
-        onError: () => {
-          loadFailed = true;
-        },
+        onEnded: () => {},
+        onError: () => {},
         onStall: () => {},
         onResume: () => {},
         onProgress: () => {},
       });
 
-      const staged: StagedPlayback = { track, engine, blobUrl: resolved.src };
+      const staged: StagedPlayback = {
+        track,
+        engine,
+        src: resolved.src,
+        fromCache: resolved.fromCache,
+        useLiveOnCacheError: resolved.useLiveOnCacheError,
+      };
       if (direction === "forward") stagedForwardRef.current = staged;
       else stagedBackwardRef.current = staged;
-
-      if (loadFailed && import.meta.env.DEV) {
-        console.debug("[transition] staged preload failed — will use normal load");
-      }
     },
     [resolveStagedTrackSrc],
   );

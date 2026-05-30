@@ -83,10 +83,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!current || !playbackStarted) return;
-    const tracks = items.map((i) => i.track);
     const generation = bumpPreCacheGeneration();
+    // Do not start background downloads while the active track is itself a live
+    // Plex stream. Opening a second uncached stream can cause Plex/browser media
+    // playback to report a premature `ended` on the current track.
+    if (!player.fromCache) return;
+    const tracks = items.map((i) => i.track);
     void runPreCacheForPlayback(tracks, currentIndex, generation);
-  }, [current?.id, currentIndex, items.length, loadGeneration, playbackStarted]);
+  }, [current?.id, currentIndex, items.length, loadGeneration, playbackStarted, player.fromCache]);
 
   useEffect(() => {
     if (!current || restorePhase) return;

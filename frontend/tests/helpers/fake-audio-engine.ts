@@ -16,6 +16,10 @@ export class FakeAudioEngine implements AudioEngine {
     this._state = "loading";
   }
 
+  setEvents(events: AudioEngineEvents): void {
+    this.events = events;
+  }
+
   /** Test helper: simulate successful load. */
   simulateLoaded(durationMs = 180_000): void {
     this._state = "loaded";

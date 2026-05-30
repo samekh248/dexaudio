@@ -22,7 +22,7 @@ export function stallWindowExceeded(stallStartedAt: number | null, nowMs: number
 }
 
 export function shouldEnterBuffering(
-  lastProgressMs: number,
+  _lastProgressMs: number,
   lastProgressAt: number | null,
   nowMs: number,
 ): boolean {

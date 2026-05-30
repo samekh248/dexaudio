@@ -449,7 +449,10 @@ export function getTranscodeUrl(config: PlexConfig, trackId: string, bitrate = 3
     protocol: "http",
     musicBitrate: String(bitrate),
     maxAudioBitrate: String(bitrate),
-    session: PLEX_CLIENT_ID,
+    // Plex treats matching session ids as the same transcode job. The player may
+    // preload the next track while the current one is still streaming, so scope
+    // the transcode session to the track to avoid terminating the active stream.
+    session: `${PLEX_CLIENT_ID}-${trackId}`,
   });
   return `${base}/music/:/transcode/universal/start.mp3?${params.toString()}&X-Plex-Token=${encodeURIComponent(config.token)}&X-Plex-Client-Identifier=${encodeURIComponent(PLEX_CLIENT_ID)}`;
 }

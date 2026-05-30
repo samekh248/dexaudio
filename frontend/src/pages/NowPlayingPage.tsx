@@ -10,7 +10,6 @@ import { prefetchSimilarIfNeeded } from "@/lib/auto-queue";
 import { usePlaybackControls } from "@/hooks/use-playback-controls";
 import { isGaplessOrCrossfadeEnabled } from "@/lib/playback-prefs-store";
 import { isSessionLevelError } from "@/lib/playback-errors";
-import { toast } from "@/components/ui/sonner";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Button } from "@/components/ui/button";
 import { trackArtSrc } from "@/lib/track-art";
@@ -20,12 +19,10 @@ export function NowPlayingPage() {
   const {
     items,
     currentIndex,
-    skippedIndices,
     next,
     setIndex,
     removeAt,
     addAutoTracks,
-    markSkipped,
     resetSkipped,
   } = usePlaybackQueue();
   const player = usePlayer();
@@ -144,6 +141,7 @@ export function NowPlayingPage() {
           <PlaybackErrorBanner
             error={{
               category: "unknown",
+              recoverable: false,
               message: "No queued tracks could be played",
               affordances: ["back_to_library", "retry_queue"],
               timestamp: new Date().toISOString(),
