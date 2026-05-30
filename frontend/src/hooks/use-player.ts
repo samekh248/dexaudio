@@ -14,6 +14,13 @@ import {
 import { readFromCache } from "@/lib/cache-service.js";
 
 import { startListening, updateListenPosition, checkAndScrobble } from "@/lib/scrobble-tracker.js";
+import {
+  onPlaybackPause,
+  onPlaybackPlay,
+  onPlaybackProgress,
+  onPlaybackStop,
+  onTrackWillChange,
+} from "@/lib/plex-playback-reporter.js";
 
 import { ApiError } from "@/services/api-client.js";
 
@@ -148,6 +155,10 @@ export function usePlayerState() {
   }, []);
 
   const unload = useCallback(() => {
+    const track = currentTrackRef.current;
+    if (track && engineRef.current.state() === "loaded") {
+      onPlaybackStop(track, engineRef.current.getPositionMs());
+    }
     clearRecoveryTimer();
     engineRef.current.destroy();
     engineRef.current = createHowlerAudioEngine();
@@ -256,13 +267,16 @@ export function usePlayerState() {
         if (loadIdRef.current !== loadId) return;
         clearError();
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+        onPlaybackPlay(track, engine.getPositionMs());
       },
       onPause: () => {
         if (loadIdRef.current !== loadId) return;
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+        onPlaybackPause(track, engine.getPositionMs());
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
+        onPlaybackStop(track, engine.getPositionMs());
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "ENDED" }));
         void checkAndScrobble();
         onEnd?.();
@@ -305,6 +319,7 @@ export function usePlayerState() {
         if (loadIdRef.current !== loadId) return;
         setPosition(ms);
         updateListenPosition(ms);
+        onPlaybackProgress(track, ms);
         if (
           machineRef.current.status === "buffering" &&
           stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
@@ -357,6 +372,7 @@ export function usePlayerState() {
       const loadId = ++loadIdRef.current;
       useLiveFallbackRef.current = false;
       onEndRef.current = onEnd;
+      void onTrackWillChange(staged.track);
       currentTrackRef.current = staged.track;
       startListening(staged.track);
       clearError();
@@ -501,6 +517,7 @@ export function usePlayerState() {
       clearRecoveryTimer();
       unload();
       clearError();
+      void onTrackWillChange(track);
       currentTrackRef.current = track;
       startListening(track);
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOAD" }));
@@ -542,6 +559,7 @@ export function usePlayerState() {
           engineRef.current.seek(seekMs);
           applyMachine(reducePlaybackMachine(machineRef.current, { type: "SEEK", positionMs: seekMs }));
           updateListenPosition(seekMs);
+          onPlaybackPlay(track, seekMs);
         };
         seekWhenLoaded();
       }
@@ -569,18 +587,22 @@ export function usePlayerState() {
   const play = useCallback(() => {
     clearError();
     usePlaybackQueue.getState().markPlaybackStarted();
+    const track = currentTrackRef.current;
     if (engineRef.current.state() === "loaded") {
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
     }
     engineRef.current.play();
+    if (track) onPlaybackPlay(track, engineRef.current.getPositionMs());
   }, [clearError, applyMachine]);
 
   const pause = useCallback(() => {
+    const track = currentTrackRef.current;
     engineRef.current.pause();
     if (engineRef.current.state() === "loaded") {
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
       const ms = engineRef.current.getPositionMs();
       persistPlaybackSessionNow(ms);
+      if (track) onPlaybackPause(track, ms);
     }
   }, [applyMachine]);
 
@@ -593,9 +615,11 @@ export function usePlayerState() {
       seekDebounceRef.current = setTimeout(() => {
         const target = pendingSeekMsRef.current;
         if (target === null) return;
+        const track = currentTrackRef.current;
         engineRef.current.seek(target);
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "SEEK", positionMs: target }));
         updateListenPosition(target);
+        if (track) onPlaybackPlay(track, target);
         pendingSeekMsRef.current = null;
       }, 150);
     },

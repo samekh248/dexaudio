@@ -266,6 +266,26 @@ export const TopStatsSchema = z.object({
 });
 export type TopStats = z.infer<typeof TopStatsSchema>;
 
+export const PlexTimelineStateSchema = z.enum(["playing", "paused", "stopped", "buffering"]);
+export type PlexTimelineState = z.infer<typeof PlexTimelineStateSchema>;
+
+export const PlexTimelineInputSchema = z.object({
+  ratingKey: z.string().min(1),
+  state: PlexTimelineStateSchema,
+  timeMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().positive(),
+  sessionKey: z.number().int(),
+});
+export type PlexTimelineInput = z.infer<typeof PlexTimelineInputSchema>;
+
+export const PlexReportingStatusSchema = z.object({
+  enabled: z.boolean(),
+  connected: z.boolean(),
+  pending: z.number().int().nonnegative(),
+  lastError: z.string().nullable(),
+});
+export type PlexReportingStatus = z.infer<typeof PlexReportingStatusSchema>;
+
 export const AppSettingsSchema = z.object({
   matchingStrictness: z.enum(["strict", "fuzzy"]).optional(),
   libraryRefreshPolicy: z.enum(["manual", "on_launch"]).optional(),
@@ -274,6 +294,11 @@ export const AppSettingsSchema = z.object({
     .object({
       enabled: z.boolean(),
       durationSec: z.number(),
+    })
+    .optional(),
+  plexPlaybackReporting: z
+    .object({
+      enabled: z.boolean(),
     })
     .optional(),
 });
