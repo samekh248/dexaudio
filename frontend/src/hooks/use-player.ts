@@ -71,6 +71,16 @@ export type LoadTrackOptions = {
   skipCache?: boolean;
 };
 
+const PREMATURE_END_MIN_DURATION_MS = 15_000;
+const PREMATURE_END_END_TOLERANCE_MS = 3_000;
+
+export function isPrematureEndedPlayback(positionMs: number, knownDurationMs: number): boolean {
+  return (
+    knownDurationMs >= PREMATURE_END_MIN_DURATION_MS &&
+    positionMs < knownDurationMs - PREMATURE_END_END_TOLERANCE_MS
+  );
+}
+
 function disposeStaged(slot: StagedPlayback | null) {
   if (!slot) return;
   slot.engine.destroy();
@@ -276,7 +286,19 @@ export function usePlayerState() {
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
-        onPlaybackStop(track, engine.getPositionMs());
+        const positionMs = engine.getPositionMs();
+        const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
+        const endedEarly = isPrematureEndedPlayback(positionMs, knownDurationMs);
+
+        if (endedEarly) {
+          const attempt = machineRef.current.recovery.attempt;
+          if (retriesRemaining(attempt)) {
+            scheduleRecovery(track, loadId, onEnd);
+            return;
+          }
+        }
+
+        onPlaybackStop(track, positionMs);
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "ENDED" }));
         void checkAndScrobble();
         onEnd?.();

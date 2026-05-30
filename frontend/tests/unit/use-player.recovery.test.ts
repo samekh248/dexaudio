@@ -5,6 +5,7 @@ import {
   RECOVERY_POLICY,
 } from "@/lib/recovery-policy";
 import { reducePlaybackMachine, initialPlaybackMachineState } from "@/lib/playback-machine";
+import { isPrematureEndedPlayback } from "@/hooks/use-player";
 
 describe("recovery flow (policy + machine)", () => {
   it("retries up to maxRetries then fails", () => {
@@ -39,5 +40,14 @@ describe("recovery flow (policy + machine)", () => {
     expect(s.status).toBe("buffering");
     s = reducePlaybackMachine(s, { type: "RETRY", nowMs: 12_000 });
     expect(s.status).toBe("recovering");
+  });
+
+  it("treats early ended events as premature", () => {
+    expect(isPrematureEndedPlayback(45_000, 180_000)).toBe(true);
+  });
+
+  it("does not treat near-end or short tracks as premature", () => {
+    expect(isPrematureEndedPlayback(177_000, 180_000)).toBe(false);
+    expect(isPrematureEndedPlayback(8_000, 12_000)).toBe(false);
   });
 });
