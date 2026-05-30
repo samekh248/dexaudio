@@ -23,12 +23,33 @@ function isPlayableContentType(contentType: string): boolean {
 async function proxyStream(
   config: PlexConfig,
   streamUrl: string,
-): Promise<{ ok: true; body: ReadableStream<Uint8Array> | null; contentType: string } | { ok: false; status: number }> {
-  const res = await fetch(streamUrl, { headers: plexMediaHeaders(config.token) });
+  rangeHeader?: string,
+): Promise<
+  | {
+      ok: true;
+      body: ReadableStream<Uint8Array> | null;
+      contentType: string;
+      status: number;
+      contentRange?: string;
+      contentLength?: string;
+    }
+  | { ok: false; status: number }
+> {
+  const headers: Record<string, string> = { ...plexMediaHeaders(config.token) };
+  if (rangeHeader) headers.Range = rangeHeader;
+
+  const res = await fetch(streamUrl, { headers });
   if (!res.ok) return { ok: false, status: res.status };
   const ct = res.headers.get("content-type") ?? "audio/mpeg";
   if (!isPlayableContentType(ct)) return { ok: false, status: 415 };
-  return { ok: true, body: res.body, contentType: ct };
+  return {
+    ok: true,
+    body: res.body,
+    contentType: ct,
+    status: res.status,
+    contentRange: res.headers.get("content-range") ?? undefined,
+    contentLength: res.headers.get("content-length") ?? undefined,
+  };
 }
 
 export async function streamRoutes(app: FastifyInstance) {
@@ -50,6 +71,8 @@ export async function streamRoutes(app: FastifyInstance) {
 
   app.get("/stream/:trackId", async (request, reply) => {
     const { trackId } = z.object({ trackId: z.string() }).parse(request.params);
+    const rangeHeaderRaw = request.headers.range;
+    const rangeHeader = Array.isArray(rangeHeaderRaw) ? rangeHeaderRaw[0] : rangeHeaderRaw;
     const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
     if (!config) throw new NotFoundError("Plex not connected");
 
@@ -73,7 +96,7 @@ export async function streamRoutes(app: FastifyInstance) {
     }
 
     for (const streamUrl of streamUrls) {
-      const result = await proxyStream(config, streamUrl);
+      const result = await proxyStream(config, streamUrl, rangeHeader);
       if (!result.ok) {
         if (result.status === 401) {
           throw new AppError(
@@ -88,9 +111,12 @@ export async function streamRoutes(app: FastifyInstance) {
         }
         continue;
       }
+      reply.code(result.status);
       reply.header("content-type", result.contentType);
       reply.header("accept-ranges", "bytes");
       reply.header("cache-control", "no-store");
+      if (result.contentRange) reply.header("content-range", result.contentRange);
+      if (result.contentLength) reply.header("content-length", result.contentLength);
       return reply.send(result.body);
     }
 

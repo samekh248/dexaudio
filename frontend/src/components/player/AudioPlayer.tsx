@@ -9,6 +9,7 @@ interface AudioPlayerProps {
   volume: number;
   fromCache?: boolean;
   loading?: boolean;
+  status?: "idle" | "loading" | "ready" | "playing" | "paused" | "buffering" | "recovering" | "ended" | "failed";
   onPlay: () => void;
   onPause: () => void;
   onSeek: (ms: number) => void;
@@ -30,6 +31,7 @@ export function AudioPlayer({
   volume,
   fromCache,
   loading,
+  status,
   onPlay,
   onPause,
   onSeek,
@@ -53,7 +55,11 @@ export function AudioPlayer({
         <span aria-live="polite">{formatMs(position)}</span>
         <span>{formatMs(duration)}</span>
       </div>
-      {loading ? <p className="text-xs text-muted-foreground">Loading…</p> : null}
+      {loading || status === "buffering" || status === "recovering" ? (
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {status === "recovering" ? "Recovering…" : status === "buffering" ? "Buffering…" : "Loading…"}
+        </p>
+      ) : null}
       <div className="flex items-center justify-center gap-2">
         <Button variant="ghost" size="icon" onClick={onPrevious} aria-label="Previous">
           <SkipBack className="h-5 w-5" />

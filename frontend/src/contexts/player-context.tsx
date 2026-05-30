@@ -5,7 +5,8 @@ import {
   usePlaybackQueue,
 } from "@/stores/playback-queue-store";
 import { bumpPreCacheGeneration, runPreCacheForPlayback } from "@/lib/pre-cache-worker";
-import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
+import { getTransitionStyle } from "@/lib/playback-prefs-store";
+import { toast } from "@/components/ui/sonner";
 
 type PlayerState = ReturnType<typeof usePlayerState>;
 
@@ -22,22 +23,43 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const restoredElapsedMs = usePlaybackQueue((s) => s.restoredElapsedMs);
   const playbackStarted = usePlaybackQueue((s) => s.playbackStarted);
 
-  const advanceQueue = useCallback(() => {
-    usePlaybackQueue.getState().next();
-  }, []);
+  const terminalHandledRef = useRef<string | null>(null);
+  const syncedGenerationRef = useRef(loadGeneration);
 
-  const onTrackEnd = useCallback(() => {
-    if (!player.tryHandoffForward()) {
-      if (import.meta.env.DEV) {
-        console.debug("[gapless] end-of-track: fallback to queue load");
+  const advanceOnce = useCallback((reason: "ended" | "failed") => {
+    const state = usePlaybackQueue.getState();
+    const sig = `${reason}:${state.loadGeneration}:${state.currentIndex}:${player.getActiveTrackId()}`;
+    if (terminalHandledRef.current === sig) return;
+    terminalHandledRef.current = sig;
+
+    if (reason === "failed" && player.error) {
+      const parts = [
+        [player.error.trackTitle, player.error.trackArtist].filter(Boolean).join(" — "),
+        player.error.technicalDetail,
+      ].filter(Boolean);
+      toast(player.error.message, {
+        description: parts.join(" · ") || undefined,
+      });
+      usePlaybackQueue.getState().markFailed(state.currentIndex);
+    }
+
+    const style = getTransitionStyle();
+    if (reason === "ended" && (style === "gapless" || style === "crossfade")) {
+      if (player.tryHandoffForward()) {
+        usePlaybackQueue.getState().advanceAfterHandoff("forward");
+        return;
       }
     }
-    advanceQueue();
-  }, [player, advanceQueue]);
 
-  const onTrackEndRef = useRef(onTrackEnd);
-  onTrackEndRef.current = onTrackEnd;
-  const syncedGenerationRef = useRef(loadGeneration);
+    usePlaybackQueue.getState().next();
+  }, [player]);
+
+  useEffect(() => {
+    player.setTerminalHandler((reason) => {
+      advanceOnce(reason);
+    });
+    return () => player.setTerminalHandler(undefined);
+  }, [player, advanceOnce]);
 
   const startPlaybackFromRestore = useCallback(async () => {
     const track = getQueueCurrentTrack(usePlaybackQueue.getState());
@@ -45,7 +67,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     const elapsed = usePlaybackQueue.getState().restoredElapsedMs;
     usePlaybackQueue.getState().exitRestorePhase();
     usePlaybackQueue.getState().markPlaybackStarted();
-    await player.loadTrack(track, () => onTrackEndRef.current(), {
+    await player.loadTrack(track, undefined, {
       autoplayOnLoad: true,
       initialSeekMs: elapsed,
     });
@@ -81,22 +103,25 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    void player.loadTrack(current, () => onTrackEndRef.current());
+    terminalHandledRef.current = null;
+    void player.loadTrack(current);
   }, [current?.id, currentIndex, loadGeneration, player.loadTrack, player.getActiveTrackId, player.seek, restorePhase]);
 
   useEffect(() => {
     if (!current || player.loading || !player.playing) return;
     if (restorePhase) return;
     if (player.getActiveTrackId() !== current.id) return;
-    if (!isGaplessPlaybackEnabled()) return;
+
+    const style = getTransitionStyle();
+    if (style !== "gapless" && style !== "crossfade") return;
 
     const nextTrack = items[currentIndex + 1]?.track;
     const prevTrack = items[currentIndex - 1]?.track;
     if (nextTrack) {
-      player.preloadForward(nextTrack, () => onTrackEndRef.current());
+      player.preloadForward(nextTrack);
     }
     if (prevTrack) {
-      player.preloadBackward(prevTrack, () => onTrackEndRef.current());
+      player.preloadBackward(prevTrack);
     }
   }, [
     current?.id,

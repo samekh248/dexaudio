@@ -6,6 +6,13 @@ import type {
 } from "@dexaudio/shared-types";
 import { ApiError } from "@/services/api-client.js";
 
+export function isRecoverableCategory(category: PlaybackErrorCategory): boolean {
+  return (
+    category === "network_interrupted" ||
+    category === "server_unreachable"
+  );
+}
+
 export function isSessionLevelError(category: PlaybackErrorCategory): boolean {
   return (
     category === "server_unreachable" ||
@@ -21,9 +28,11 @@ function failure(
   affordances: PlaybackAffordance[],
   track?: Track,
   technicalDetail?: string,
+  recoverable?: boolean,
 ): PlaybackFailure {
   const failureEvent: PlaybackFailure = {
     category,
+    recoverable: recoverable ?? isRecoverableCategory(category),
     message,
     affordances,
     timestamp: new Date().toISOString(),
@@ -34,6 +43,7 @@ function failure(
   };
   console.error("[playback]", {
     category: failureEvent.category,
+    recoverable: failureEvent.recoverable,
     trackId: failureEvent.trackId,
     technicalDetail: failureEvent.technicalDetail,
     timestamp: failureEvent.timestamp,
@@ -51,6 +61,7 @@ function fromApiError(error: ApiError, track?: Track): PlaybackFailure {
         ["sign_in", "retry"],
         track,
         detail,
+        false,
       );
     case 404:
       return failure(
@@ -59,6 +70,7 @@ function fromApiError(error: ApiError, track?: Track): PlaybackFailure {
         ["skip"],
         track,
         detail,
+        false,
       );
     case 415:
       return failure(
@@ -67,6 +79,7 @@ function fromApiError(error: ApiError, track?: Track): PlaybackFailure {
         ["skip"],
         track,
         detail,
+        false,
       );
     case 502:
       return failure(
@@ -75,6 +88,7 @@ function fromApiError(error: ApiError, track?: Track): PlaybackFailure {
         ["retry", "back_to_library"],
         track,
         detail,
+        true,
       );
     default:
       if (error.status >= 500) {
@@ -84,9 +98,10 @@ function fromApiError(error: ApiError, track?: Track): PlaybackFailure {
           ["retry", "back_to_library"],
           track,
           detail,
+          true,
         );
       }
-      return failure("unknown", error.message || "Playback failed", ["skip"], track, detail);
+      return failure("unknown", error.message || "Playback failed", ["skip"], track, detail, false);
   }
 }
 
@@ -113,6 +128,7 @@ function fromHowlerError(error: number | string, track?: Track): PlaybackFailure
         ["skip"],
         track,
         `howler:${msg}`,
+        false,
       );
     }
     if (lower.includes("network") || lower.includes("fetch")) {
@@ -122,6 +138,7 @@ function fromHowlerError(error: number | string, track?: Track): PlaybackFailure
         ["retry", "back_to_library"],
         track,
         `howler:${msg}`,
+        true,
       );
     }
     if (lower.includes("not supported") || lower.includes("no codec")) {
@@ -131,6 +148,7 @@ function fromHowlerError(error: number | string, track?: Track): PlaybackFailure
         ["skip"],
         track,
         `howler:${msg}`,
+        false,
       );
     }
   }
@@ -142,6 +160,7 @@ function fromHowlerError(error: number | string, track?: Track): PlaybackFailure
       ["retry", "back_to_library"],
       track,
       `howler:${code} ${msg}`,
+      true,
     );
   }
   if (code === 3) {
@@ -151,12 +170,25 @@ function fromHowlerError(error: number | string, track?: Track): PlaybackFailure
       ["skip"],
       track,
       `howler:${code} ${msg}`,
+      false,
     );
   }
   if (code === 4) {
-    return failure("unknown", "Media source could not be played", ["skip"], track, `howler:${code} ${msg}`);
+    return failure("unknown", "Media source could not be played", ["skip"], track, `howler:${code} ${msg}`, false);
   }
-  return failure("unknown", "Playback failed", ["skip"], track, `howler:${code} ${msg}`);
+  return failure("unknown", "Playback failed", ["skip"], track, `howler:${code} ${msg}`, false);
+}
+
+/** Stall / buffering timeout — recoverable network interruption. */
+export function classifyStallError(track?: Track): PlaybackFailure {
+  return failure(
+    "network_interrupted",
+    "Playback stalled — retrying",
+    ["retry", "skip"],
+    track,
+    "stall:progress_watchdog",
+    true,
+  );
 }
 
 export function classifyPlaybackError(

@@ -18,6 +18,7 @@ interface PlaybackQueueState {
   items: QueueItem[];
   currentIndex: number;
   skippedIndices: Set<number>;
+  failedIndices: Set<number>;
   loadGeneration: number;
   playbackStarted: boolean;
   hydrated: boolean;
@@ -33,7 +34,9 @@ interface PlaybackQueueState {
   setIndex: (index: number) => void;
   clearAutoItems: () => void;
   markSkipped: (index: number) => void;
+  markFailed: (index: number) => void;
   resetSkipped: () => void;
+  advanceAfterHandoff: (direction: "forward" | "backward") => void;
   markPlaybackStarted: () => void;
   exitRestorePhase: () => void;
   hydrateFromSnapshot: (snapshot: PlaybackSessionSnapshot | null) => void;
@@ -92,6 +95,7 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
   items: [],
   currentIndex: 0,
   skippedIndices: new Set<number>(),
+  failedIndices: new Set<number>(),
   loadGeneration: 0,
   playbackStarted: false,
   hydrated: false,
@@ -151,6 +155,7 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
       items: newItems,
       currentIndex: 0,
       skippedIndices: new Set(),
+      failedIndices: new Set(),
       loadGeneration: s.loadGeneration + 1,
       playbackStarted: true,
       restorePhase: false,
@@ -166,7 +171,25 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
     });
   },
 
-  resetSkipped: () => set({ skippedIndices: new Set() }),
+  markFailed: (index) => {
+    set((s) => {
+      const failedIndices = new Set(s.failedIndices);
+      failedIndices.add(index);
+      return { failedIndices };
+    });
+  },
+
+  resetSkipped: () => set({ skippedIndices: new Set(), failedIndices: new Set() }),
+
+  advanceAfterHandoff: (direction) => {
+    const { currentIndex, items, playbackStarted } = get();
+    if (!playbackStarted || currentIndex < 0) return;
+    const nextIndex = direction === "forward" ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex >= 0 && nextIndex < items.length) {
+      set({ currentIndex: nextIndex });
+      schedulePersist(get);
+    }
+  },
 
   addToQueue: (tracks) => {
     set((s) => ({

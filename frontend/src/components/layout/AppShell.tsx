@@ -28,19 +28,21 @@ export function AppShell() {
           <Link to="/" className="shrink-0 text-lg font-bold tracking-tight">
             Dexaudio
           </Link>
-          <nav className="flex flex-1 flex-wrap items-center gap-1">
+          <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
             {mainNav.map((item) => (
               <Link key={item.to} to={item.to} className={navLinkClass(location.pathname === item.to)}>
                 {item.label}
               </Link>
             ))}
           </nav>
-          <NowPlayingNav
-            isActive={location.pathname === "/now-playing"}
-            playing={playing}
-            navLinkClass={navLinkClass}
-          />
-          <AccountWidget />
+          <div className="flex shrink-0 items-center gap-2">
+            <NowPlayingNav
+              isActive={location.pathname === "/now-playing"}
+              playing={playing}
+              navLinkClass={navLinkClass}
+            />
+            <AccountWidget />
+          </div>
         </div>
       </header>
       <div aria-hidden className="h-14 shrink-0" />

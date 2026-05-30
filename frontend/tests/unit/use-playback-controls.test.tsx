@@ -6,6 +6,7 @@ import { usePlaybackQueue } from "@/stores/playback-queue-store";
 const mockPlayer = {
   playing: false,
   autoplayBlocked: false,
+  position: 0,
   play: vi.fn(),
   pause: vi.fn(),
   resumeAutoplay: vi.fn(),
@@ -19,13 +20,9 @@ vi.mock("@/contexts/player-context", () => ({
   usePlayer: () => mockPlayer,
 }));
 
-vi.mock("@/lib/local-storage", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/local-storage")>();
-  return {
-    ...actual,
-    isGaplessPlaybackEnabled: () => false,
-  };
-});
+vi.mock("@/lib/playback-prefs-store", () => ({
+  getTransitionStyle: () => "none",
+}));
 
 const track = {
   id: "t1",
@@ -44,6 +41,7 @@ describe("usePlaybackControls", () => {
     vi.clearAllMocks();
     mockPlayer.playing = false;
     mockPlayer.autoplayBlocked = false;
+    mockPlayer.position = 0;
     usePlaybackQueue.setState({
       items: [{ track, source: "user" as const }],
       currentIndex: 0,
@@ -90,10 +88,10 @@ describe("usePlaybackControls", () => {
     expect(mockPlayer.resumeAutoplay).toHaveBeenCalled();
   });
 
-  it("next fades out and advances queue", () => {
+  it("next advances queue when transition is none", () => {
     const { result } = renderHook(() => usePlaybackControls());
     act(() => result.current.next());
-    expect(mockPlayer.fadeOut).toHaveBeenCalled();
+    expect(mockPlayer.fadeOut).not.toHaveBeenCalled();
     expect(nextSpy).toHaveBeenCalled();
   });
 

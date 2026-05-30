@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export function AccountWidget() {
   const location = useLocation();
   const [open, setOpen] = useState(false);
-  const { data: account } = useQuery({
+  const { data: account, isLoading } = useQuery({
     queryKey: ["plex-account"],
     queryFn: async () => {
       try {
@@ -22,14 +22,63 @@ export function AccountWidget() {
     retry: false,
   });
 
-  if (!account) return null;
+  const menuItems = (
+    <Link
+      to="/settings"
+      onClick={() => setOpen(false)}
+      className={cn(
+        "flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
+        location.pathname === "/settings" && "bg-accent text-accent-foreground",
+      )}
+    >
+      <Settings className="h-4 w-4" aria-hidden />
+      Settings
+    </Link>
+  );
+
+  if (isLoading) {
+    return (
+      <div
+        className="h-7 w-7 shrink-0 animate-pulse rounded-full bg-muted"
+        aria-hidden
+      />
+    );
+  }
+
+  if (!account) {
+    return (
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+            aria-label="Account menu"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-accent text-xs font-medium text-accent-foreground">
+              <Settings className="h-4 w-4" aria-hidden />
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0 opacity-60" aria-hidden />
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={6}
+            className="z-50 min-w-[10rem] rounded-md border border-border bg-card p-1 shadow-md"
+          >
+            {menuItems}
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+    );
+  }
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
       <Popover.Trigger asChild>
         <button
           type="button"
-          className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+          className="flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
           aria-label="Account menu"
         >
           {account.avatarUrl ? (
@@ -49,17 +98,7 @@ export function AccountWidget() {
           sideOffset={6}
           className="z-50 min-w-[10rem] rounded-md border border-border bg-card p-1 shadow-md"
         >
-          <Link
-            to="/settings"
-            onClick={() => setOpen(false)}
-            className={cn(
-              "flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground",
-              location.pathname === "/settings" && "bg-accent text-accent-foreground",
-            )}
-          >
-            <Settings className="h-4 w-4" aria-hidden />
-            Settings
-          </Link>
+          {menuItems}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
