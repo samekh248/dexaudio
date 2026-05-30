@@ -1,0 +1,42 @@
+# Client playback preferences contract (feature 013)
+# Extends feature 005 with play navigation. No REST API changes.
+
+openapi: 3.1.0
+info:
+  title: Dexaudio — Play Navigation Preference (Client)
+  version: 0.13.1
+  description: >
+    Feature 013 introduces no new `/api/v1/*` endpoints. Documents
+    localStorage key, hook scope, and behavioral invariants including
+    clarifications from session 2026-05-29.
+
+components:
+  schemas:
+    PlayNavigationMode:
+      type: string
+      enum:
+        - navigate
+        - stay
+      default: navigate
+      description: >
+        navigate — after play-now via centralized hook, open /now-playing.
+        stay — after play-now via centralized hook, remain on current route.
+
+  x-localStorageKeys:
+    playNavigation: dexaudio.playback.playNavigation
+
+  x-invariants:
+    - name: play_navigation_read_fallback
+      rule: "IF stored value NOT IN (navigate, stay) THEN effective mode = navigate"
+    - name: play_now_single_choke_point
+      rule: "ONLY usePlayNow reads playNavigation and may navigate after queue replacement"
+    - name: hook_scope_all_callers
+      rule: "ANY current or future play-now routed through usePlayNow MUST honor playNavigation"
+    - name: add_to_queue_no_navigate
+      rule: "addToQueue MUST NOT read playNavigation or change routes"
+    - name: session_restore_no_navigate
+      rule: "bootstrapPlaybackSession / hydrateFromSnapshot MUST NOT navigate based on playNavigation"
+    - name: stay_mode_no_toast
+      rule: "IF mode = stay THEN play-now MUST NOT emit supplemental now-playing toast"
+
+paths: {}

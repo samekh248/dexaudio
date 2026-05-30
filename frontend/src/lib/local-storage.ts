@@ -7,6 +7,8 @@ export const StorageKeys = {
   crossfade: `${PREFIX}playback.crossfade`,
   /** Client prefs: specs/005-gapless-playback/contracts/playback-preferences.yaml */
   gaplessPlayback: `${PREFIX}playback.gapless`,
+  /** Client prefs: specs/013-play-navigation-preference/contracts/playback-preferences.yaml */
+  playNavigation: `${PREFIX}playback.playNavigation`,
   preCacheLookAhead: `${PREFIX}playback.preCacheLookAhead`,
   preCapGb: `${PREFIX}cache.preCapGb`,
   permanentCapGb: `${PREFIX}cache.permanentCapGb`,
@@ -48,6 +50,15 @@ export type GaplessPlaybackPreference = {
 };
 
 export type ThemeMode = "sync" | "light" | "dark" | "custom";
+
+export type PlayNavigationMode = "navigate" | "stay";
+
+const VALID_PLAY_NAVIGATION = new Set<PlayNavigationMode>(["navigate", "stay"]);
+
+export function getPlayNavigationMode(): PlayNavigationMode {
+  const raw = getItem<string>(StorageKeys.playNavigation, "navigate");
+  return VALID_PLAY_NAVIGATION.has(raw as PlayNavigationMode) ? (raw as PlayNavigationMode) : "navigate";
+}
 
 export function isGaplessPlaybackEnabled(): boolean {
   return getItem<GaplessPlaybackPreference>(StorageKeys.gaplessPlayback, { enabled: true }).enabled;
