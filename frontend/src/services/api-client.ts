@@ -17,7 +17,9 @@ import type {
   PlexLibrary,
   PlexPinCreated,
   PlexPinStatus,
+  PlexReportingStatus,
   PlexServerInfo,
+  PlexTimelineInput,
   ScrobbleInput,
   SearchResults,
   TopStats,
@@ -75,6 +77,14 @@ export const api = {
   completePlexAuth: (body: PlexAuthCompleteInput) =>
     request<PlexAuthCompleteResult>("/plex/auth/complete", { method: "POST", body: JSON.stringify(body) }),
   getPlexAccount: () => request<PlexAccountIdentity>("/plex/account"),
+
+  postPlexTimeline: (body: PlexTimelineInput) =>
+    request<{ queued?: boolean }>("/plex/timeline", { method: "POST", body: JSON.stringify(body) }),
+
+  getPlexReportingStatus: () => request<PlexReportingStatus>("/plex/reporting/status"),
+
+  retryPlexReporting: () =>
+    request<{ status: string; pending: number }>("/plex/reporting/retry", { method: "POST" }),
 
   getAlbums: (libraryId: string, page = 1, pageSize = 48) =>
     request<AlbumPage>(`/library/albums?libraryId=${libraryId}&page=${page}&pageSize=${pageSize}`),

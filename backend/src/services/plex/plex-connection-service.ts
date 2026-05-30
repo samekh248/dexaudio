@@ -9,6 +9,18 @@ import * as plexTv from "./plex-tv-client.js";
 
 type Db = ReturnType<typeof getDb>;
 
+export type GetPlexConfigOptions = {
+  /** When false, skip /identity validation (use for high-frequency timeline posts). Default true. */
+  validate?: boolean;
+};
+
+let validatedConfigCache: { config: plexClient.PlexConfig; cachedAt: number } | null = null;
+const VALIDATED_CONFIG_CACHE_MS = 30_000;
+
+function clearValidatedConfigCache() {
+  validatedConfigCache = null;
+}
+
 function toPublic(row: typeof plexConnections.$inferSelect, tokenMasked?: string): PlexConnectionPublic {
   return {
     connected: true,
@@ -76,27 +88,66 @@ export async function saveConnection(
     });
   }
 
+  clearValidatedConfigCache();
   return getConnectionPublic(db, appSecret);
 }
 
-export async function getPlexConfig(db: Db, appSecret: string): Promise<plexClient.PlexConfig | null> {
+function loadPlexConfigRow(
+  row: typeof plexConnections.$inferSelect,
+  appSecret: string,
+): plexClient.PlexConfig | null {
+  try {
+    return {
+      serverUrl: row.serverUrl,
+      token: decrypt(Buffer.from(row.tokenEncrypted), appSecret),
+      machineIdentifier: row.machineIdentifier ?? undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function getPlexConfig(
+  db: Db,
+  appSecret: string,
+  options: GetPlexConfigOptions = {},
+): Promise<plexClient.PlexConfig | null> {
+  const validate = options.validate !== false;
   const rows = await db.select().from(plexConnections).orderBy(desc(plexConnections.updatedAt)).limit(1);
   const row = rows[0];
   if (!row) return null;
 
-  const config: plexClient.PlexConfig = {
-    serverUrl: row.serverUrl,
-    token: decrypt(Buffer.from(row.tokenEncrypted), appSecret),
-    machineIdentifier: row.machineIdentifier ?? undefined,
-  };
+  const config = loadPlexConfigRow(row, appSecret);
+  if (!config) return null;
+
+  if (!validate) {
+    return config;
+  }
+
+  const now = Date.now();
+  if (
+    validatedConfigCache &&
+    now - validatedConfigCache.cachedAt < VALIDATED_CONFIG_CACHE_MS &&
+    validatedConfigCache.config.serverUrl === config.serverUrl &&
+    validatedConfigCache.config.token === config.token
+  ) {
+    return validatedConfigCache.config;
+  }
 
   const valid = await plexClient.validateConnection(config);
-  if (valid) return config;
+  if (valid) {
+    validatedConfigCache = { config, cachedAt: now };
+    return config;
+  }
 
   if (!row.machineIdentifier) return config;
 
   const rediscovered = await tryRediscoverServerUrl(db, appSecret, row);
-  return rediscovered ?? config;
+  const resolved = rediscovered ?? config;
+  if (rediscovered) {
+    validatedConfigCache = { config: resolved, cachedAt: now };
+  }
+  return resolved;
 }
 
 async function tryRediscoverServerUrl(
@@ -129,6 +180,7 @@ async function tryRediscoverServerUrl(
       })
       .where(eq(plexConnections.id, row.id));
 
+    clearValidatedConfigCache();
     return {
       serverUrl: conn.uri,
       token: server.accessToken,
@@ -137,6 +189,11 @@ async function tryRediscoverServerUrl(
   } catch {
     return null;
   }
+}
+
+/** @internal test helper */
+export function resetPlexConfigCacheForTests(): void {
+  clearValidatedConfigCache();
 }
 
 export async function listLibraries(db: Db, appSecret: string): Promise<PlexLibrary[]> {

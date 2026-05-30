@@ -8,6 +8,7 @@ import {
   lastfmAccounts,
   artistSpotlightState,
   plexConnections,
+  plexTimelineOutbox,
   scrobbleOutbox,
 } from "../../db/schema.js";
 
@@ -19,6 +20,7 @@ export async function resetTargets(db: Db, targets: ResetTarget[]) {
   const all = targets.includes("all");
   if (all || targets.includes("plex")) {
     await db.delete(artistSpotlightState);
+    await db.delete(plexTimelineOutbox);
     await db.delete(plexConnections);
   }
   if (all || targets.includes("discogs")) {

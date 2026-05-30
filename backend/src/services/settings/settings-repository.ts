@@ -10,6 +10,7 @@ const DEFAULTS: AppSettings = {
   libraryRefreshPolicy: "on_launch",
   autoQueueSimilar: true,
   crossfade: { enabled: false, durationSec: 3 },
+  plexPlaybackReporting: { enabled: true },
 };
 
 export async function getSettings(db: Db): Promise<AppSettings> {

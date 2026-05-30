@@ -94,6 +94,16 @@ export const scrobbleOutbox = pgTable("scrobble_outbox", {
   status: scrobbleStatusEnum("status").default("pending").notNull(),
 });
 
+export const plexTimelineOutbox = pgTable("plex_timeline_outbox", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  payload: jsonb("payload").notNull(),
+  retryCount: integer("retry_count").default(0).notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  status: scrobbleStatusEnum("status").default("pending").notNull(),
+  lastError: text("last_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const appSettings = pgTable("app_settings", {
   key: text("key").primaryKey(),
   value: jsonb("value").notNull(),
