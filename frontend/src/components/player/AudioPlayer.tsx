@@ -1,6 +1,7 @@
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
+import { VolumeControl } from "@/components/player/VolumeControl";
 
 interface AudioPlayerProps {
   playing: boolean;
@@ -70,8 +71,8 @@ export function AudioPlayer({
         <Button variant="ghost" size="icon" onClick={onNext} aria-label="Next">
           <SkipForward className="h-5 w-5" />
         </Button>
+        <VolumeControl volume={volume} onVolume={onVolume} iconClassName="h-5 w-5" />
       </div>
-      <Slider value={[volume * 100]} max={100} step={1} onValueChange={([v]) => onVolume(v / 100)} aria-label="Volume" />
     </div>
   );
 }

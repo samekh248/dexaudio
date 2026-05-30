@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Play } from "lucide-react";
 import { AudioVisualizerIcon } from "@/components/layout/AudioVisualizerIcon";
 import { NowPlayingControlPanel } from "@/components/layout/NowPlayingControlPanel";
+import { usePlayer } from "@/contexts/player-context";
 import { usePlaybackControls } from "@/hooks/use-playback-controls";
 import { useHoverIntent } from "@/hooks/use-hover-intent";
 
@@ -16,6 +17,7 @@ export function NowPlayingNav({
   playing: boolean;
   navLinkClass: (active: boolean) => string;
 }) {
+  const { volume, setVolume } = usePlayer();
   const { current, playing: isPlaying, toggle, next, previous } = usePlaybackControls();
   const hasTrack = current !== null;
   const { open, regionProps, linkTouchProps } = useHoverIntent({ enabled: hasTrack });
@@ -39,6 +41,8 @@ export function NowPlayingNav({
           open={open}
           current={current}
           playing={isPlaying}
+          volume={volume}
+          onVolume={setVolume}
           onToggle={toggle}
           onNext={next}
           onPrevious={previous}

@@ -18,6 +18,8 @@ function renderPanel(
     open: true,
     current: track,
     playing: false,
+    volume: 0.8,
+    onVolume: vi.fn(),
     onToggle: vi.fn(),
     onNext: vi.fn(),
     onPrevious: vi.fn(),
@@ -64,6 +66,13 @@ describe("NowPlayingControlPanel", () => {
     expect(within(region).getByRole("button", { name: "Previous" })).toBeInTheDocument();
     expect(within(region).getByRole("button", { name: "Play" })).toBeInTheDocument();
     expect(within(region).getByRole("button", { name: "Next" })).toBeInTheDocument();
+    expect(within(region).getByRole("button", { name: "Volume" })).toBeInTheDocument();
+  });
+
+  it("shows volume control when panel is open", () => {
+    renderPanel({ volume: 0 });
+    const region = screen.getByRole("region", { name: "Playback controls" });
+    expect(within(region).getByRole("button", { name: "Volume muted" })).toBeInTheDocument();
   });
 
   it("shows marquee artist - track text", () => {

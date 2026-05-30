@@ -3,12 +3,15 @@ import type { Track } from "@dexaudio/shared-types";
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TrackMarquee } from "@/components/player/TrackMarquee";
+import { VolumeControl } from "@/components/player/VolumeControl";
 import { cn } from "@/lib/utils";
 
 export interface NowPlayingControlPanelProps {
   open: boolean;
   current: Track;
   playing: boolean;
+  volume: number;
+  onVolume: (v: number) => void;
   onToggle: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -61,6 +64,8 @@ export function NowPlayingControlPanel({
   open,
   current,
   playing,
+  volume,
+  onVolume,
   onToggle,
   onNext,
   onPrevious,
@@ -98,6 +103,11 @@ export function NowPlayingControlPanel({
         <ControlButton label="Next" onClick={onNext}>
           <SkipForward className="h-4 w-4" aria-hidden />
         </ControlButton>
+        <VolumeControl
+          volume={volume}
+          onVolume={onVolume}
+          forceClosed={!open}
+        />
       </div>
     </div>
   );
