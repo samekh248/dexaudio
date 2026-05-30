@@ -27,6 +27,8 @@ vi.mock("@/hooks/use-player", () => ({
     tryHandoffBackward: vi.fn(() => false),
     getActiveTrackId: vi.fn(() => null),
     cancelStagedPreloads: vi.fn(),
+    setTerminalHandler: vi.fn(),
+    status: "idle",
   }),
 }));
 
@@ -45,6 +47,7 @@ describe("player restore gate", () => {
       restoredElapsedMs: 5000,
       hydrated: true,
       skippedIndices: new Set(),
+      failedIndices: new Set(),
       loadGeneration: 0,
     });
   });

@@ -40,8 +40,12 @@ export const PlaybackAffordanceSchema = z.enum([
 ]);
 export type PlaybackAffordance = z.infer<typeof PlaybackAffordanceSchema>;
 
+export const TransitionStyleSchema = z.enum(["none", "gapless", "crossfade"]);
+export type TransitionStyle = z.infer<typeof TransitionStyleSchema>;
+
 export const PlaybackFailureSchema = z.object({
   category: PlaybackErrorCategorySchema,
+  recoverable: z.boolean(),
   message: z.string(),
   trackTitle: z.string().optional(),
   trackArtist: z.string().optional(),

@@ -8,7 +8,7 @@ import { PlaybackErrorBanner } from "@/components/player/PlaybackErrorBanner";
 import { QueuePanel } from "@/components/queue/QueuePanel";
 import { prefetchSimilarIfNeeded } from "@/lib/auto-queue";
 import { usePlaybackControls } from "@/hooks/use-playback-controls";
-import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
+import { isGaplessOrCrossfadeEnabled } from "@/lib/playback-prefs-store";
 import { isSessionLevelError } from "@/lib/playback-errors";
 import { toast } from "@/components/ui/sonner";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
@@ -56,26 +56,8 @@ export function NowPlayingPage() {
     lastErrorRef.current = key;
 
     if (player.autoplayBlocked) return;
-
     if (isSessionLevelError(player.error.category)) return;
-
-    // Don't auto-advance when a selected track failed before playback started.
-    if (!player.playing && player.position < 1000) return;
-
-    const parts = [
-      [player.error.trackTitle, player.error.trackArtist].filter(Boolean).join(" — "),
-      player.error.technicalDetail,
-    ].filter(Boolean);
-    toast(player.error.message, { description: parts.join(" · ") || undefined });
-    markSkipped(currentIndex);
-
-    if (items.length > 0 && skippedIndices.size + 1 >= items.length) {
-      setQueueExhausted(true);
-      return;
-    }
-
-    next();
-  }, [player.error, player.autoplayBlocked]);
+  }, [player.error, player.autoplayBlocked, current?.id]);
 
   useEffect(() => {
     if (player.playing && !player.loading) {
@@ -120,7 +102,7 @@ export function NowPlayingPage() {
     player.clearError();
 
     const targetTrack = items[index]?.track;
-    if (targetTrack && isGaplessPlaybackEnabled()) {
+    if (targetTrack && isGaplessOrCrossfadeEnabled()) {
       if (index === currentIndex + 1 && player.tryHandoffForward(targetTrack)) {
         setIndex(index);
         return;
@@ -197,6 +179,7 @@ export function NowPlayingPage() {
           volume={player.volume}
           fromCache={player.fromCache}
           loading={player.loading}
+          status={player.status}
           onPlay={toggle}
           onPause={player.pause}
           onSeek={player.seek}

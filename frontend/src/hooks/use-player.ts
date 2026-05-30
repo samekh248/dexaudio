@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Howl, Howler } from "howler";
+import { Howler } from "howler";
 
 import type { PlaybackFailure, Track } from "@dexaudio/shared-types";
 
-import { getItem, isGaplessPlaybackEnabled, setItem, StorageKeys } from "@/lib/local-storage.js";
+import { getItem, setItem, StorageKeys } from "@/lib/local-storage.js";
 
 import {
   persistPlaybackSessionNow,
@@ -18,35 +18,38 @@ import { startListening, updateListenPosition, checkAndScrobble } from "@/lib/sc
 import { ApiError } from "@/services/api-client.js";
 
 import {
-
   classifyPlaybackError,
-
+  classifyStallError,
   isAutoplayBlockedError,
-
   isIgnorableHowlerError,
-
 } from "@/lib/playback-errors.js";
 
 import {
-
   blobUrlForTrack,
-
   howlerFormatsForTrack,
-
   streamUrlForTrack,
-
 } from "@/lib/stream-audio.js";
 
-
+import { createHowlerAudioEngine, type AudioEngine } from "@/lib/audio-engine.js";
+import {
+  initialPlaybackMachineState,
+  isLoadingIndicatorStatus,
+  isTerminalStatus,
+  reducePlaybackMachine,
+  type PlaybackMachineState,
+  type PlaybackStatus,
+} from "@/lib/playback-machine.js";
+import {
+  backoffForAttempt,
+  retriesRemaining,
+  stallWindowExceeded,
+} from "@/lib/recovery-policy.js";
+import { getTransitionStyle, usePlaybackPrefs } from "@/lib/playback-prefs-store.js";
 
 type StagedPlayback = {
-
   track: Track;
-
-  howl: Howl;
-
+  engine: AudioEngine;
   blobUrl: string;
-
 };
 
 export type LoadTrackOptions = {
@@ -55,73 +58,56 @@ export type LoadTrackOptions = {
   skipCache?: boolean;
 };
 
-
-
 function disposeStaged(slot: StagedPlayback | null) {
-
   if (!slot) return;
-
-  slot.howl.unload();
-
-  if (slot.blobUrl.startsWith("blob:")) {
-
-    URL.revokeObjectURL(slot.blobUrl);
-
-  }
-
+  slot.engine.destroy();
 }
 
-
-
 export function usePlayerState() {
-
-  const howlRef = useRef<Howl | null>(null);
-
-  const blobUrlRef = useRef<string | null>(null);
-
+  const engineRef = useRef<AudioEngine>(createHowlerAudioEngine());
   const loadIdRef = useRef(0);
-
   const stagedGenRef = useRef(0);
-
   const stagedForwardRef = useRef<StagedPlayback | null>(null);
-
   const stagedBackwardRef = useRef<StagedPlayback | null>(null);
-
-  const positionAtErrorRef = useRef(0);
-
-  const retryOnceRef = useRef(false);
-
   const loadTrackRef = useRef<
     (track: Track, onEnd?: () => void, options?: LoadTrackOptions) => Promise<void>
   >(async () => undefined);
-
   const positionPersistRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const onEndRef = useRef<(() => void) | undefined>(undefined);
-
-
+  const onTerminalRef = useRef<((reason: "ended" | "failed") => void) | undefined>(undefined);
+  const machineRef = useRef<PlaybackMachineState>(initialPlaybackMachineState);
+  const recoveryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const seekDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSeekMsRef = useRef<number | null>(null);
+  const currentTrackRef = useRef<Track | null>(null);
+  const useLiveFallbackRef = useRef(false);
+  const wallClockRef = useRef<number>(Date.now());
 
   const [playing, setPlaying] = useState(false);
-
   const [position, setPosition] = useState(0);
-
   const [duration, setDuration] = useState(0);
-
   const [volume, setVolumeState] = useState(() => getItem(StorageKeys.volume, 1));
-
   const [fromCache, setFromCache] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-
+  const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [error, setError] = useState<PlaybackFailure | null>(null);
-
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
 
-  const currentTrackRef = useRef<Track | null>(null);
+  const transitionStyle = usePlaybackPrefs((s) => s.transition);
+  const crossfadeDurationSec = usePlaybackPrefs((s) => s.crossfadeDurationSec);
+
+  const loading = isLoadingIndicatorStatus(status);
+
+  const applyMachine = useCallback((next: PlaybackMachineState) => {
+    machineRef.current = next;
+    setStatus(next.status);
+    setPosition(next.positionMs);
+    if (next.failure) setError(next.failure);
+    setPlaying(next.status === "playing");
+  }, []);
 
   const syncRestoredPosition = useCallback(() => {
     const { restorePhase, restoredElapsedMs, playbackStarted } = usePlaybackQueue.getState();
-    if (restorePhase && playbackStarted && !howlRef.current) {
+    if (restorePhase && playbackStarted && engineRef.current.state() === "unloaded") {
       setPosition(restoredElapsedMs);
     }
   }, []);
@@ -135,128 +121,58 @@ export function usePlayerState() {
     });
   }, [syncRestoredPosition]);
 
-  const crossfade = getItem(StorageKeys.crossfade, { enabled: false, durationSec: 3 });
-
-
+  const clearRecoveryTimer = useCallback(() => {
+    if (recoveryTimerRef.current) {
+      clearTimeout(recoveryTimerRef.current);
+      recoveryTimerRef.current = null;
+    }
+  }, []);
 
   const clearError = useCallback(() => {
-
     setError(null);
-
     setAutoplayBlocked(false);
-
   }, []);
-
-
-
-  const revokeBlobUrl = useCallback(() => {
-
-    if (blobUrlRef.current) {
-
-      URL.revokeObjectURL(blobUrlRef.current);
-
-      blobUrlRef.current = null;
-
-    }
-
-  }, []);
-
-
 
   const cancelStagedPreloads = useCallback(() => {
-
     stagedGenRef.current += 1;
-
     disposeStaged(stagedForwardRef.current);
-
     disposeStaged(stagedBackwardRef.current);
-
     stagedForwardRef.current = null;
-
     stagedBackwardRef.current = null;
-
   }, []);
 
-
-
   const unload = useCallback(() => {
-
-    const outgoing = howlRef.current;
-
-    howlRef.current = null;
-
-    outgoing?.unload();
-
-    revokeBlobUrl();
-
+    clearRecoveryTimer();
+    engineRef.current.destroy();
+    engineRef.current = createHowlerAudioEngine();
+    applyMachine(reducePlaybackMachine(machineRef.current, { type: "CANCEL" }));
     setPlaying(false);
-
     setPosition(0);
-
     setDuration(0);
-
-  }, [revokeBlobUrl]);
-
-
+  }, [applyMachine, clearRecoveryTimer]);
 
   const resolveTrackSrc = useCallback(
-
     async (
-
       track: Track,
-
       loadId: number,
-
       options: { skipCache?: boolean } = {},
-
     ): Promise<{ src: string; fromCache: boolean; useLiveOnCacheError: boolean } | null> => {
-
       try {
-
         if (!options.skipCache) {
-
           const cached = await readFromCache(track.id);
-
           if (loadIdRef.current !== loadId) return null;
-
-
-
           if (cached && cached.size > 2048) {
-
-            const url = blobUrlForTrack(track, cached);
-
-            return { src: url, fromCache: true, useLiveOnCacheError: true };
-
+            return { src: blobUrlForTrack(track, cached), fromCache: true, useLiveOnCacheError: true };
           }
-
         }
-
-
-
         if (loadIdRef.current !== loadId) return null;
-
-        return {
-
-          src: streamUrlForTrack(track.id),
-
-          fromCache: false,
-
-          useLiveOnCacheError: false,
-
-        };
-
+        return { src: streamUrlForTrack(track.id), fromCache: false, useLiveOnCacheError: false };
       } catch (err) {
-
         if (loadIdRef.current !== loadId) return null;
-
         throw err;
-
       }
-
     },
-
     [],
-
   );
 
   const resolveStagedTrackSrc = useCallback(
@@ -267,18 +183,11 @@ export function usePlayerState() {
       try {
         const cached = await readFromCache(track.id);
         if (stagedGenRef.current !== stagedGen) return null;
-
         if (cached && cached.size > 2048) {
-          const url = blobUrlForTrack(track, cached);
-          return { src: url, fromCache: true, useLiveOnCacheError: true };
+          return { src: blobUrlForTrack(track, cached), fromCache: true, useLiveOnCacheError: true };
         }
-
         if (stagedGenRef.current !== stagedGen) return null;
-        return {
-          src: streamUrlForTrack(track.id),
-          fromCache: false,
-          useLiveOnCacheError: false,
-        };
+        return { src: streamUrlForTrack(track.id), fromCache: false, useLiveOnCacheError: false };
       } catch {
         return null;
       }
@@ -286,784 +195,474 @@ export function usePlayerState() {
     [],
   );
 
-  const createHowl = useCallback(
-
-    (
-
-      track: Track,
-
-      src: string,
-
-      loadId: number,
-
-      useLiveOnCacheError: boolean,
-
-      onEnd: (() => void) | undefined,
-
-      autoplayOnLoad: boolean,
-
-      suppressErrors = false,
-
-    ) => {
-
-      const howl = new Howl({
-
-        src: [src],
-
-        format: howlerFormatsForTrack(track.format),
-
-        html5: true,
-
-        volume,
-
-        onplay: () => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          setPlaying(true);
-
-          clearError();
-
-          const d = howl.duration();
-
-          if (d && Number.isFinite(d)) {
-
-            setDuration(Math.round(d * 1000));
-
-          }
-
-        },
-
-        onpause: () => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          setPlaying(false);
-
-        },
-
-        onstop: () => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          setPlaying(false);
-
-        },
-
-        onend: () => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          setPlaying(false);
-
-          void checkAndScrobble();
-
-          onEnd?.();
-
-        },
-
-        onload: () => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          setLoading(false);
-
-          const d = howl.duration();
-
-          if (d && Number.isFinite(d)) {
-
-            setDuration(Math.round(d * 1000));
-
-          }
-
-          if (!autoplayOnLoad) return;
-
-          const playResult = howl.play() as unknown;
-
-          if (playResult && typeof (playResult as Promise<void>).catch === "function") {
-
-            void (playResult as Promise<void>).catch(() => {
-
-              if (Howler.ctx?.state === "suspended") {
-
-                setAutoplayBlocked(true);
-
-              }
-
-            });
-
-          }
-
-        },
-
-        onloaderror: (_id, err: unknown) => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          if (isIgnorableHowlerError(err)) return;
-
-          if (suppressErrors) return;
-
-          setLoading(false);
-
-          positionAtErrorRef.current = (howl.seek() as number) * 1000;
-
-          const howlerErr = typeof err === "number" || typeof err === "string" ? err : 4;
-
-
-
-          if (useLiveOnCacheError && src.startsWith("blob:")) {
-
-            howl.unload();
-
-            if (src.startsWith("blob:")) URL.revokeObjectURL(src);
-
-            void loadTrackRef.current(track, onEnd, { skipCache: true });
-
-            return;
-
-          }
-
-
-
-          if (positionAtErrorRef.current > 0 && !retryOnceRef.current) {
-
-            retryOnceRef.current = true;
-
-            void loadTrackRef.current(track, onEnd);
-
-            return;
-
-          }
-
-
-
-          setError(classifyPlaybackError("howler", howlerErr, track));
-
-        },
-
-        onplayerror: (_id, err: unknown) => {
-
-          if (howlRef.current !== howl) return;
-
-          if (loadIdRef.current !== loadId) return;
-
-          if (isIgnorableHowlerError(err)) return;
-
-          if (suppressErrors) return;
-
-          const howlerErr = typeof err === "number" || typeof err === "string" ? err : 4;
-
-          if (Howler.ctx?.state === "suspended" || isAutoplayBlockedError(howlerErr)) {
-
-            setAutoplayBlocked(true);
-
-            setLoading(false);
-
-            return;
-
-          }
-
-          setError(classifyPlaybackError("howler", howlerErr, track));
-
-          setLoading(false);
-
-        },
-
-      });
-
-
-
-      return howl;
-
+  const scheduleRecovery = useCallback(
+    (track: Track, loadId: number, onEnd?: () => void) => {
+      clearRecoveryTimer();
+      const attempt = machineRef.current.recovery.attempt;
+      const delay = backoffForAttempt(attempt + 1);
+      recoveryTimerRef.current = setTimeout(() => {
+        if (loadIdRef.current !== loadId) return;
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "RETRY", nowMs: Date.now() }));
+        void loadTrackRef.current(track, onEnd, { skipCache: useLiveFallbackRef.current });
+      }, delay);
     },
-
-    [volume, clearError],
-
+    [applyMachine, clearRecoveryTimer],
   );
 
+  const handleTerminalFailure = useCallback(
+    (track: Track, failure: PlaybackFailure, loadId: number) => {
+      if (loadIdRef.current !== loadId) return;
+      applyMachine(
+        reducePlaybackMachine(machineRef.current, {
+          type: "ERROR",
+          recoverable: failure.recoverable,
+          retriesLeft: false,
+          failure,
+        }),
+      );
+      onTerminalRef.current?.("failed");
+    },
+    [applyMachine],
+  );
 
+  const bindEngine = useCallback(
+    (
+      track: Track,
+      src: string,
+      loadId: number,
+      useLiveOnCacheError: boolean,
+      onEnd: (() => void) | undefined,
+      autoplayOnLoad: boolean,
+      engine: AudioEngine,
+    ) => {
+      engine.setVolume(volume);
+      engine.load(src, howlerFormatsForTrack(track.format), {
+        onLoaded: (durationMs) => {
+          if (loadIdRef.current !== loadId) return;
+          setDuration(durationMs);
+          applyMachine(
+            reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: autoplayOnLoad }),
+          );
+          if (autoplayOnLoad) engine.play();
+        },
+        onPlay: () => {
+          if (loadIdRef.current !== loadId) return;
+          clearError();
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+        },
+        onPause: () => {
+          if (loadIdRef.current !== loadId) return;
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+        },
+        onEnded: () => {
+          if (loadIdRef.current !== loadId) return;
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "ENDED" }));
+          void checkAndScrobble();
+          onEnd?.();
+          onTerminalRef.current?.("ended");
+        },
+        onError: (err) => {
+          if (loadIdRef.current !== loadId) return;
+          if (isIgnorableHowlerError(err)) return;
+          if (Howler.ctx?.state === "suspended" || isAutoplayBlockedError(err)) {
+            setAutoplayBlocked(true);
+            applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+            return;
+          }
+          if (useLiveOnCacheError && src.startsWith("blob:") && !useLiveFallbackRef.current) {
+            useLiveFallbackRef.current = true;
+            void loadTrackRef.current(track, onEnd, { skipCache: true });
+            return;
+          }
+          const failure = classifyPlaybackError("howler", err, track);
+          const attempt = machineRef.current.recovery.attempt;
+          if (failure.recoverable && retriesRemaining(attempt)) {
+            scheduleRecovery(track, loadId, onEnd);
+            return;
+          }
+          setError(failure);
+          handleTerminalFailure(track, failure, loadId);
+        },
+        onStall: () => {
+          if (loadIdRef.current !== loadId) return;
+          if (machineRef.current.status !== "playing") return;
+          applyMachine(
+            reducePlaybackMachine(machineRef.current, { type: "STALL", nowMs: Date.now() }),
+          );
+        },
+        onResume: () => {
+          if (loadIdRef.current !== loadId) return;
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "RESUME" }));
+        },
+        onProgress: (ms) => {
+          if (loadIdRef.current !== loadId) return;
+          setPosition(ms);
+          updateListenPosition(ms);
+          if (
+            machineRef.current.status === "buffering" &&
+            stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
+          ) {
+            const stallFailure = classifyStallError(track);
+            const attempt = machineRef.current.recovery.attempt;
+            if (retriesRemaining(attempt)) {
+              scheduleRecovery(track, loadId, onEnd);
+            } else {
+              setError(stallFailure);
+              handleTerminalFailure(track, stallFailure, loadId);
+            }
+          }
+        },
+      });
+    },
+    [volume, clearError, applyMachine, scheduleRecovery, handleTerminalFailure],
+  );
 
   const promoteStaged = useCallback(
+    (staged: StagedPlayback, onEnd?: () => void, crossfade = false): boolean => {
+      if (staged.engine.state() !== "loaded") return false;
 
-    (staged: StagedPlayback, onEnd?: () => void): boolean => {
-
-      const state = staged.howl.state();
-
-      if (state !== "loaded") return false;
-
-
-
-      const outgoing = howlRef.current;
-      const outgoingBlob = blobUrlRef.current;
-
-      howlRef.current = staged.howl;
-
-      blobUrlRef.current = staged.blobUrl.startsWith("blob:") ? staged.blobUrl : null;
-
-      if (outgoing) {
-        outgoing.unload();
-        if (outgoingBlob?.startsWith("blob:")) {
-          URL.revokeObjectURL(outgoingBlob);
-        }
-      }
+      const outgoing = engineRef.current;
+      engineRef.current = staged.engine;
+      outgoing.destroy();
 
       currentTrackRef.current = staged.track;
-
       startListening(staged.track);
-
       clearError();
+      setFromCache(staged.blobUrl.startsWith("blob:"));
+      setDuration(staged.engine.getDurationMs());
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: false }));
 
-      setFromCache(false);
-
-      setLoading(false);
-
-
-
-      staged.howl.volume(volume);
-
-      const d = staged.howl.duration();
-
-      if (d && Number.isFinite(d)) {
-
-        setDuration(Math.round(d * 1000));
-
+      if (crossfade && transitionStyle === "crossfade") {
+        const fadeMs = crossfadeDurationSec * 1000;
+        staged.engine.setVolume(0);
+        staged.engine.fadeVolume(0, volume, fadeMs);
+        staged.engine.play();
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+        setPosition(0);
+      } else {
+        staged.engine.setVolume(volume);
+        staged.engine.play();
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+        setPosition(0);
       }
-
-      staged.howl.play();
-
-      setPlaying(true);
-
-      setPosition(0);
-
-
 
       if (import.meta.env.DEV) {
-
-        console.debug("[gapless] handoff", staged.track.id);
-
+        console.debug("[transition] handoff", staged.track.id);
       }
-
-
-
       return true;
-
     },
-
-    [volume, clearError],
-
+    [volume, clearError, applyMachine, transitionStyle, crossfadeDurationSec],
   );
-
-
 
   const preloadStaged = useCallback(
-
     async (track: Track, direction: "forward" | "backward", onEnd?: () => void) => {
-
-      if (!isGaplessPlaybackEnabled()) return;
-
-
+      const style = getTransitionStyle();
+      if (style !== "gapless" && style !== "crossfade") return;
 
       const gen = ++stagedGenRef.current;
-
       if (direction === "forward") {
-
         disposeStaged(stagedForwardRef.current);
-
         stagedForwardRef.current = null;
-
       } else {
-
         disposeStaged(stagedBackwardRef.current);
-
         stagedBackwardRef.current = null;
-
       }
-
-
 
       const resolved = await resolveStagedTrackSrc(track, gen);
-
       if (stagedGenRef.current !== gen || !resolved) return;
 
-      const stagedLoadId = loadIdRef.current;
-      const howl = createHowl(
-        track,
-        resolved.src,
-        stagedLoadId,
-        resolved.useLiveOnCacheError,
-        onEnd,
-        false,
-        true,
-      );
+      const engine = createHowlerAudioEngine();
+      let loadFailed = false;
+      engine.load(resolved.src, howlerFormatsForTrack(track.format), {
+        onLoaded: () => {},
+        onPlay: () => {},
+        onPause: () => {},
+        onEnded: () => onEnd?.(),
+        onError: () => {
+          loadFailed = true;
+        },
+        onStall: () => {},
+        onResume: () => {},
+        onProgress: () => {},
+      });
 
-      const staged: StagedPlayback = { track, howl, blobUrl: resolved.src };
+      const staged: StagedPlayback = { track, engine, blobUrl: resolved.src };
+      if (direction === "forward") stagedForwardRef.current = staged;
+      else stagedBackwardRef.current = staged;
 
-
-
-      if (direction === "forward") {
-
-        stagedForwardRef.current = staged;
-
-      } else {
-
-        stagedBackwardRef.current = staged;
-
+      if (loadFailed && import.meta.env.DEV) {
+        console.debug("[transition] staged preload failed — will use normal load");
       }
-
     },
-
-    [createHowl, resolveStagedTrackSrc],
-
+    [resolveStagedTrackSrc],
   );
-
-
 
   const preloadForward = useCallback(
-
     (track: Track, onEnd?: () => void) => {
-
       void preloadStaged(track, "forward", onEnd);
-
     },
-
     [preloadStaged],
-
   );
-
-
 
   const preloadBackward = useCallback(
-
     (track: Track, onEnd?: () => void) => {
-
       void preloadStaged(track, "backward", onEnd);
-
     },
-
     [preloadStaged],
-
   );
 
+  const tryHandoffForward = useCallback(
+    (expectedTrack?: Track) => {
+      const style = getTransitionStyle();
+      if (style !== "gapless" && style !== "crossfade") return false;
+      const staged = stagedForwardRef.current;
+      if (!staged) return false;
+      if (expectedTrack && staged.track.id !== expectedTrack.id) return false;
+      const crossfade = style === "crossfade";
+      if (!promoteStaged(staged, onEndRef.current, crossfade)) return false;
+      stagedForwardRef.current = null;
+      return true;
+    },
+    [promoteStaged],
+  );
 
-
-  const tryHandoffForward = useCallback((expectedTrack?: Track) => {
-
-    if (!isGaplessPlaybackEnabled()) return false;
-
-    const staged = stagedForwardRef.current;
-
-    if (!staged) {
-
-      if (import.meta.env.DEV) console.debug("[gapless] forward miss: no staged track");
-
-      return false;
-
-    }
-
-    if (expectedTrack && staged.track.id !== expectedTrack.id) {
-
-      if (import.meta.env.DEV) console.debug("[gapless] forward miss: staged track mismatch");
-
-      return false;
-
-    }
-
-    if (!promoteStaged(staged, onEndRef.current)) {
-
-      if (import.meta.env.DEV) console.debug("[gapless] forward miss: not loaded");
-
-      return false;
-
-    }
-
-    stagedForwardRef.current = null;
-
-    return true;
-
-  }, [promoteStaged]);
-
-
-
-  const tryHandoffBackward = useCallback((expectedTrack?: Track) => {
-
-    if (!isGaplessPlaybackEnabled()) return false;
-
-    const staged = stagedBackwardRef.current;
-
-    if (!staged) return false;
-
-    if (expectedTrack && staged.track.id !== expectedTrack.id) return false;
-
-    if (!promoteStaged(staged, onEndRef.current)) return false;
-
-    stagedBackwardRef.current = null;
-
-    return true;
-
-  }, [promoteStaged]);
-
-
+  const tryHandoffBackward = useCallback(
+    (expectedTrack?: Track) => {
+      const style = getTransitionStyle();
+      if (style !== "gapless" && style !== "crossfade") return false;
+      const staged = stagedBackwardRef.current;
+      if (!staged) return false;
+      if (expectedTrack && staged.track.id !== expectedTrack.id) return false;
+      if (!promoteStaged(staged, onEndRef.current, false)) return false;
+      stagedBackwardRef.current = null;
+      return true;
+    },
+    [promoteStaged],
+  );
 
   const getActiveTrackId = useCallback(() => currentTrackRef.current?.id ?? null, []);
 
-
-
   const loadTrack = useCallback(
-
     async (track: Track, onEnd?: () => void, options: LoadTrackOptions = {}) => {
-
       const autoplayOnLoad = options.autoplayOnLoad ?? true;
-
       const loadId = ++loadIdRef.current;
-
-      retryOnceRef.current = false;
-
-      positionAtErrorRef.current = 0;
-
+      useLiveFallbackRef.current = options.skipCache ?? false;
       onEndRef.current = onEnd;
-
       cancelStagedPreloads();
-
+      clearRecoveryTimer();
       unload();
-
       clearError();
-
       currentTrackRef.current = track;
-
       startListening(track);
-
-      setLoading(true);
-
-
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOAD" }));
 
       let resolved: Awaited<ReturnType<typeof resolveTrackSrc>>;
-
       try {
-
-        resolved = await resolveTrackSrc(track, loadId, {
-
-          skipCache: options.skipCache,
-
-        });
-
+        resolved = await resolveTrackSrc(track, loadId, { skipCache: options.skipCache });
       } catch (err) {
-
         if (loadIdRef.current !== loadId) return;
-
-        setLoading(false);
-
-        if (err instanceof ApiError) {
-
-          setError(classifyPlaybackError("api", err, track));
-
-        } else {
-
-          setError(
-
-            classifyPlaybackError(
-
-              "howler",
-
-              err instanceof Error ? err.message : 2,
-
-              track,
-
-            ),
-
-          );
-
-        }
-
+        const failure =
+          err instanceof ApiError
+            ? classifyPlaybackError("api", err, track)
+            : classifyPlaybackError("howler", err instanceof Error ? err.message : 2, track);
+        setError(failure);
+        handleTerminalFailure(track, failure, loadId);
         return;
-
       }
-
-      if (loadIdRef.current !== loadId || !resolved) {
-
-        return;
-
-      }
-
-
-
-      revokeBlobUrl();
-
-      blobUrlRef.current = resolved.src.startsWith("blob:") ? resolved.src : null;
+      if (loadIdRef.current !== loadId || !resolved) return;
 
       setFromCache(resolved.fromCache);
-
-
-
-      if (loadIdRef.current !== loadId) return;
-
-      const howl = createHowl(
-
+      bindEngine(
         track,
-
         resolved.src,
-
         loadId,
-
         resolved.useLiveOnCacheError,
-
         onEnd,
-
         autoplayOnLoad,
-
-        false,
-
+        engineRef.current,
       );
 
-      howlRef.current = howl;
-
       if (options.initialSeekMs !== undefined && options.initialSeekMs > 0) {
-        howl.once("load", () => {
+        const seekMs = options.initialSeekMs;
+        const seekWhenLoaded = () => {
           if (loadIdRef.current !== loadId) return;
-          const seekSec = options.initialSeekMs! / 1000;
-          howl.seek(seekSec);
-          setPosition(options.initialSeekMs!);
-          updateListenPosition(options.initialSeekMs!);
-        });
+          if (engineRef.current.state() !== "loaded") {
+            setTimeout(seekWhenLoaded, 50);
+            return;
+          }
+          engineRef.current.seek(seekMs);
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "SEEK", positionMs: seekMs }));
+          updateListenPosition(seekMs);
+        };
+        seekWhenLoaded();
       }
-
     },
-
-    [unload, clearError, createHowl, revokeBlobUrl, resolveTrackSrc, cancelStagedPreloads],
-
+    [
+      unload,
+      clearError,
+      bindEngine,
+      resolveTrackSrc,
+      cancelStagedPreloads,
+      applyMachine,
+      clearRecoveryTimer,
+      handleTerminalFailure,
+    ],
   );
-
-
 
   loadTrackRef.current = loadTrack;
 
-
-
   const resumeAutoplay = useCallback(() => {
-
     void Howler.ctx?.resume();
-
     setAutoplayBlocked(false);
-
-    howlRef.current?.play();
-
+    engineRef.current.play();
   }, []);
-
-
 
   const play = useCallback(() => {
-
     clearError();
-
     usePlaybackQueue.getState().markPlaybackStarted();
-
-    howlRef.current?.play();
-
-  }, [clearError]);
-
-
+    if (engineRef.current.state() === "loaded") {
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+    }
+    engineRef.current.play();
+  }, [clearError, applyMachine]);
 
   const pause = useCallback(() => {
-
-    howlRef.current?.pause();
-
-    if (howlRef.current) {
-      const ms = Math.round((howlRef.current.seek() as number) * 1000);
+    engineRef.current.pause();
+    if (engineRef.current.state() === "loaded") {
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+      const ms = engineRef.current.getPositionMs();
       persistPlaybackSessionNow(ms);
     }
+  }, [applyMachine]);
 
-  }, []);
-
-
-
-  const seek = useCallback((ms: number) => {
-
-    const rounded = Math.round(ms);
-
-    howlRef.current?.seek(rounded / 1000);
-
-    setPosition(rounded);
-
-    updateListenPosition(rounded);
-
-  }, []);
-
-
-
-  const setVolume = useCallback((v: number) => {
-
-    setVolumeState(v);
-
-    setItem(StorageKeys.volume, v);
-
-    howlRef.current?.volume(v);
-
-    stagedForwardRef.current?.howl.volume(v);
-
-    stagedBackwardRef.current?.howl.volume(v);
-
-  }, []);
-
-
-
-  const fadeOut = useCallback(
-
-    (cb: () => void) => {
-
-      const howl = howlRef.current;
-
-      if (!howl || !crossfade.enabled || isGaplessPlaybackEnabled()) {
-
-        cb();
-
-        return;
-
-      }
-
-      const remainingSec = Math.max(0, howl.duration() - (howl.seek() as number));
-
-      const effectiveSec = Math.min(crossfade.durationSec, remainingSec);
-
-      const from = howl.volume();
-
-      const steps = 20;
-
-      const stepMs = (effectiveSec * 1000) / steps;
-
-      let i = 0;
-
-      const interval = setInterval(() => {
-
-        i += 1;
-
-        howl.volume(from * (1 - i / steps));
-
-        if (i >= steps) {
-
-          clearInterval(interval);
-
-          cb();
-
-        }
-
-      }, stepMs);
-
+  const seek = useCallback(
+    (ms: number) => {
+      const rounded = Math.round(ms);
+      pendingSeekMsRef.current = rounded;
+      setPosition(rounded);
+      if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
+      seekDebounceRef.current = setTimeout(() => {
+        const target = pendingSeekMsRef.current;
+        if (target === null) return;
+        engineRef.current.seek(target);
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "SEEK", positionMs: target }));
+        updateListenPosition(target);
+        pendingSeekMsRef.current = null;
+      }, 150);
     },
-
-    [crossfade],
-
+    [applyMachine],
   );
 
+  const setVolume = useCallback((v: number) => {
+    setVolumeState(v);
+    setItem(StorageKeys.volume, v);
+    engineRef.current.setVolume(v);
+    stagedForwardRef.current?.engine.setVolume(v);
+    stagedBackwardRef.current?.engine.setVolume(v);
+  }, []);
 
-
-  useEffect(() => {
-
-    const id = setInterval(() => {
-
-      const howl = howlRef.current;
-
-      if (howl?.playing()) {
-
-        const ms = Math.round((howl.seek() as number) * 1000);
-
-        setPosition(ms);
-
-        updateListenPosition(ms);
-
+  const fadeOut = useCallback(
+    (cb: () => void) => {
+      const style = getTransitionStyle();
+      if (style !== "crossfade" || engineRef.current.state() !== "loaded") {
+        cb();
+        return;
       }
+      const remainingMs = Math.max(
+        0,
+        engineRef.current.getDurationMs() - engineRef.current.getPositionMs(),
+      );
+      const fadeMs = Math.min(crossfadeDurationSec * 1000, remainingMs);
+      if (fadeMs <= 0) {
+        cb();
+        return;
+      }
+      engineRef.current.fadeVolume(volume, 0, fadeMs);
+      setTimeout(cb, fadeMs);
+    },
+    [crossfadeDurationSec, volume],
+  );
 
-    }, 250);
-
-    return () => clearInterval(id);
-
+  const setTerminalHandler = useCallback((handler: ((reason: "ended" | "failed") => void) | undefined) => {
+    onTerminalRef.current = handler;
   }, []);
 
   useEffect(() => {
+    const id = setInterval(() => {
+      if (engineRef.current.state() !== "loaded") return;
+      if (status === "playing") {
+        const ms = engineRef.current.getPositionMs();
+        setPosition(ms);
+        updateListenPosition(ms);
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [status]);
 
+  useEffect(() => {
     positionPersistRef.current = setInterval(() => {
-
-      const howl = howlRef.current;
-
-      if (!howl?.playing() || !usePlaybackQueue.getState().playbackStarted) return;
-
-      const ms = Math.round((howl.seek() as number) * 1000);
-
-      persistPlaybackSessionNow(ms);
-
+      if (status !== "playing" || !usePlaybackQueue.getState().playbackStarted) return;
+      persistPlaybackSessionNow(engineRef.current.getPositionMs());
     }, 5000);
-
     return () => {
-
       if (positionPersistRef.current) clearInterval(positionPersistRef.current);
-
     };
+  }, [status]);
 
-  }, []);
-
-
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        wallClockRef.current = Date.now();
+        return;
+      }
+      const elapsed = Date.now() - wallClockRef.current;
+      if (elapsed > 0 && status === "buffering") {
+        const stallStarted = machineRef.current.recovery.stallStartedAt;
+        if (stallStarted !== null && stallWindowExceeded(stallStarted, Date.now())) {
+          const track = currentTrackRef.current;
+          if (track) {
+            const attempt = machineRef.current.recovery.attempt;
+            if (retriesRemaining(attempt)) {
+              scheduleRecovery(track, loadIdRef.current, onEndRef.current);
+            }
+          }
+        }
+      }
+      if (engineRef.current.state() === "loaded" && (status === "playing" || status === "paused")) {
+        const ms = engineRef.current.getPositionMs();
+        setPosition(ms);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [status, scheduleRecovery]);
 
   return {
-
     playing,
-
     position,
-
     duration,
-
     volume,
-
     fromCache,
-
     loading,
-
+    status,
     error,
-
     autoplayBlocked,
-
     loadTrack,
-
     play,
-
     pause,
-
     seek,
-
     setVolume,
-
     fadeOut,
-
     unload,
-
     clearError,
-
     resumeAutoplay,
-
     preloadForward,
-
     preloadBackward,
-
     tryHandoffForward,
-
     tryHandoffBackward,
-
     getActiveTrackId,
-
     cancelStagedPreloads,
-
+    setTerminalHandler,
+    isTerminalStatus,
   };
-
 }
-
-

@@ -1,7 +1,9 @@
 import { useCallback } from "react";
 import { usePlayer } from "@/contexts/player-context";
 import { getQueueCurrentTrack, usePlaybackQueue } from "@/stores/playback-queue-store";
-import { isGaplessPlaybackEnabled } from "@/lib/local-storage";
+import { getTransitionStyle } from "@/lib/playback-prefs-store";
+
+const PREVIOUS_RESTART_MS = 3000;
 
 export function usePlaybackControls() {
   const player = usePlayer();
@@ -9,29 +11,44 @@ export function usePlaybackControls() {
   const items = usePlaybackQueue((s) => s.items);
   const next = usePlaybackQueue((s) => s.next);
   const previous = usePlaybackQueue((s) => s.previous);
+  const advanceAfterHandoff = usePlaybackQueue((s) => s.advanceAfterHandoff);
   const current = usePlaybackQueue(getQueueCurrentTrack);
 
   const handleNext = useCallback(() => {
     const nextTrack = items[currentIndex + 1]?.track;
-    if (isGaplessPlaybackEnabled() && nextTrack && player.tryHandoffForward(nextTrack)) {
-      next();
+    const style = getTransitionStyle();
+    if ((style === "gapless" || style === "crossfade") && nextTrack && player.tryHandoffForward(nextTrack)) {
+      if (style === "crossfade") {
+        player.fadeOut(() => advanceAfterHandoff("forward"));
+      } else {
+        advanceAfterHandoff("forward");
+      }
       return;
     }
-    player.fadeOut(() => next());
-  }, [items, currentIndex, next, player]);
+    if (style === "crossfade") {
+      player.fadeOut(() => next());
+    } else {
+      next();
+    }
+  }, [items, currentIndex, next, player, advanceAfterHandoff]);
 
   const handlePrevious = useCallback(() => {
-    if (currentIndex === 0 && player.playing) {
+    if (player.position > PREVIOUS_RESTART_MS) {
+      player.seek(0);
+      return;
+    }
+    if (currentIndex === 0) {
       player.seek(0);
       return;
     }
     const prevTrack = items[currentIndex - 1]?.track;
-    if (isGaplessPlaybackEnabled() && prevTrack && player.tryHandoffBackward(prevTrack)) {
-      previous();
+    const style = getTransitionStyle();
+    if ((style === "gapless" || style === "crossfade") && prevTrack && player.tryHandoffBackward(prevTrack)) {
+      advanceAfterHandoff("backward");
       return;
     }
     previous();
-  }, [currentIndex, items, player, previous]);
+  }, [currentIndex, items, player, previous, advanceAfterHandoff]);
 
   const toggle = useCallback(() => {
     if (player.autoplayBlocked) {
