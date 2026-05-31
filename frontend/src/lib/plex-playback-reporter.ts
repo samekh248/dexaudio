@@ -46,6 +46,10 @@ export function setPlexReportingEnabled(enabled: boolean) {
   reportingEnabled = enabled;
 }
 
+export function isPlexReportingActive(): boolean {
+  return reportingEnabled && plexConnected;
+}
+
 let gateRefreshInFlight: Promise<void> | null = null;
 
 export async function refreshPlexReportingGate(): Promise<void> {

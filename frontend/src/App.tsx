@@ -16,6 +16,7 @@ import { SettingsPage } from "@/pages/SettingsPage";
 import { PlexSetupPage } from "@/pages/onboarding/PlexSetupPage";
 import { useThemeSync } from "@/hooks/use-theme-sync";
 import { useLibraryRefreshOnLaunch } from "@/hooks/use-library-refresh";
+import { useRecentlyPlayedRefresh } from "@/hooks/use-recently-played-refresh";
 import { Toaster } from "@/components/ui/sonner";
 import { PlayerProvider } from "@/contexts/player-context";
 import { bootstrapPlaybackSession } from "@/lib/playback-bootstrap";
@@ -30,6 +31,7 @@ bootstrapPlaybackSession();
 function AppRoutes() {
   useThemeSync();
   useLibraryRefreshOnLaunch();
+  useRecentlyPlayedRefresh();
   return (
     <Routes>
       <Route element={<AppShell />}>

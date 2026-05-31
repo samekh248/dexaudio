@@ -2,10 +2,40 @@ import type { PlexTimelineInput } from "@dexaudio/shared-types";
 import type { getDb } from "../../db/index.js";
 import * as plexConnection from "./plex-connection-service.js";
 import * as outbox from "./plex-timeline-outbox.js";
-import { reportTimeline } from "./plex-timeline-service.js";
+import { reportScrobble, reportTimeline } from "./plex-timeline-service.js";
 import * as settingsRepo from "../settings/settings-repository.js";
+import { invalidateRecentlyPlayedProfileCache } from "./targeted-library-service.js";
+import type { PlexConfig } from "./plex-client.js";
 
 type Db = ReturnType<typeof getDb>;
+const SCROBBLE_MIN_TIME_MS = 5_000;
+const SCROBBLE_DEDUP_TTL_MS = 2 * 60 * 60 * 1000;
+const scrobbledSessionKeys = new Map<string, number>();
+
+function makeScrobbleSessionKey(input: PlexTimelineInput): string {
+  return `${input.ratingKey}:${input.sessionKey}`;
+}
+
+function pruneScrobbleDedup(nowMs: number): void {
+  for (const [key, expiresAt] of scrobbledSessionKeys) {
+    if (expiresAt <= nowMs) scrobbledSessionKeys.delete(key);
+  }
+}
+
+async function maybeScrobble(config: PlexConfig, input: PlexTimelineInput) {
+  if (input.state !== "playing") return;
+  if (input.timeMs < SCROBBLE_MIN_TIME_MS) return;
+
+  const now = Date.now();
+  pruneScrobbleDedup(now);
+  const dedupeKey = makeScrobbleSessionKey(input);
+  if (scrobbledSessionKeys.has(dedupeKey)) return;
+
+  const result = await reportScrobble(config, { ratingKey: input.ratingKey });
+  if (result.ok) {
+    scrobbledSessionKeys.set(dedupeKey, now + SCROBBLE_DEDUP_TTL_MS);
+  }
+}
 
 export async function submitTimeline(
   db: Db,
@@ -24,6 +54,10 @@ export async function submitTimeline(
 
   const result = await reportTimeline(config, input);
   if (result.ok) {
+    await maybeScrobble(config, input);
+    if (input.state === "playing") {
+      invalidateRecentlyPlayedProfileCache();
+    }
     return { status: 204 };
   }
 

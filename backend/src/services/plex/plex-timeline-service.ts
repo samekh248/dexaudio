@@ -24,6 +24,14 @@ export function buildTimelineSearchParams(input: PlexTimelineInput): URLSearchPa
   return params;
 }
 
+/** Build query string for Plex GET /:/scrobble (exported for unit tests). */
+export function buildScrobbleSearchParams(input: Pick<PlexTimelineInput, "ratingKey">): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set("key", input.ratingKey);
+  params.set("identifier", LIBRARY_IDENTIFIER);
+  return params;
+}
+
 export function timelineRequestHeaders(token: string): Record<string, string> {
   return {
     ...plexMediaHeaders(token),
@@ -58,6 +66,38 @@ export async function reportTimeline(
     return { ok: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Plex timeline request failed";
+    return { ok: false, error: message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function reportScrobble(
+  config: PlexConfig,
+  input: Pick<PlexTimelineInput, "ratingKey">,
+  timeoutMs = 8000,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const base = normalizeUrl(config.serverUrl);
+  const params = buildScrobbleSearchParams(input);
+  if (config.machineIdentifier) {
+    params.set("machineIdentifier", config.machineIdentifier);
+  }
+  const url = `${base}/:/scrobble?${params.toString()}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: timelineRequestHeaders(config.token),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      return { ok: false, error: `Plex scrobble HTTP ${res.status}` };
+    }
+    return { ok: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Plex scrobble request failed";
     return { ok: false, error: message };
   } finally {
     clearTimeout(timer);

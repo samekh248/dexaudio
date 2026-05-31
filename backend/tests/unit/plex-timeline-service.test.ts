@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildScrobbleSearchParams,
   buildTimelineSearchParams,
   timelineRequestHeaders,
 } from "../../src/services/plex/plex-timeline-service.js";
@@ -28,5 +29,11 @@ describe("plex-timeline-service", () => {
     expect(headers["X-Plex-Product"]).toBe(PLEX_PRODUCT_NAME);
     expect(headers["X-Plex-Device-Name"]).toBe("DexAudio");
     expect(headers["X-Plex-Token"]).toBe("test-token");
+  });
+
+  it("builds scrobble query params", () => {
+    const params = buildScrobbleSearchParams({ ratingKey: "12345" });
+    expect(params.get("key")).toBe("12345");
+    expect(params.get("identifier")).toBe("com.plexapp.plugins.library");
   });
 });

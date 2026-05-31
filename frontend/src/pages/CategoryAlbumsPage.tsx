@@ -49,7 +49,8 @@ export function CategoryAlbumsPage() {
   }
 
   const albums = (data?.items ?? []) as Album[];
-  if (!albums.length) {
+
+  if (!albums.length && !isLoading) {
     return <EmptyState title="No albums" description={`No albums in ${config.title}.`} />;
   }
 

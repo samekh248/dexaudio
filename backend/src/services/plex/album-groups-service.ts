@@ -20,17 +20,10 @@ export function clampGroupLimit(limit: number): number {
 export function selectRecentlyPlayed(
   albums: AlbumWithStats[],
   limit = HOME_PREVIEW_LIMIT,
-  now = Date.now(),
 ): AlbumWithStats[] {
   return [...albums]
-    .filter((a) => (a.playCount30d ?? 0) > 0)
-    .sort((a, b) => {
-      const pc = (b.playCount30d ?? 0) - (a.playCount30d ?? 0);
-      if (pc !== 0) return pc;
-      const aT = a.lastPlayedAt?.getTime() ?? 0;
-      const bT = b.lastPlayedAt?.getTime() ?? 0;
-      return bT - aT;
-    })
+    .filter((a) => a.lastPlayedAt != null)
+    .sort((a, b) => b.lastPlayedAt!.getTime() - a.lastPlayedAt!.getTime())
     .slice(0, clampGroupLimit(limit));
 }
 
