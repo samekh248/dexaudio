@@ -29,4 +29,20 @@ describe("api client", () => {
     );
     await expect(api.health()).rejects.toBeInstanceOf(ApiError);
   });
+
+  it("uses no-store cache policy for album group requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ items: [] }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.getAlbumGroup("lib-1", "recently-played", 10);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/library/albums/groups/recently-played?libraryId=lib-1&limit=10",
+      expect.objectContaining({ cache: "no-store" }),
+    );
+  });
 });

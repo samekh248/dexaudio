@@ -90,7 +90,9 @@ export const api = {
     request<AlbumPage>(`/library/albums?libraryId=${libraryId}&page=${page}&pageSize=${pageSize}`),
 
   getAlbumGroups: (libraryId: string) =>
-    request<AlbumGroupsResponse>(`/library/albums/groups?libraryId=${encodeURIComponent(libraryId)}`),
+    request<AlbumGroupsResponse>(`/library/albums/groups?libraryId=${encodeURIComponent(libraryId)}`, {
+      cache: "no-store",
+    }),
 
   getAlbumGroup: (libraryId: string, groupKey: LibraryGroupKey, limit = 10) => {
     const params = new URLSearchParams({
@@ -99,9 +101,9 @@ export const api = {
     });
     const path = `/library/albums/groups/${groupKey}?${params}`;
     if (groupKey === "artist-spotlights") {
-      return request<ArtistSpotlightGroupResponse>(path);
+      return request<ArtistSpotlightGroupResponse>(path, { cache: "no-store" });
     }
-    return request<AlbumGroupResponse>(path);
+    return request<AlbumGroupResponse>(path, { cache: "no-store" });
   },
 
   getAllAlbums: (libraryId: string) =>

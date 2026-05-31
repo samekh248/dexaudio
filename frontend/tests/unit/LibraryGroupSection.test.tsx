@@ -1,9 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { LibraryGroupSection } from "@/components/albums/LibraryGroupSection";
 
 describe("LibraryGroupSection", () => {
+  afterEach(() => cleanup());
+
   it("renders skeleton when loading", () => {
     render(
       <LibraryGroupSection
@@ -70,5 +72,27 @@ describe("LibraryGroupSection", () => {
       </MemoryRouter>,
     );
     expect(screen.getByText("Loaded")).toBeInTheDocument();
+  });
+
+  it("keeps recently-played cards visible during background refetch", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <LibraryGroupSection
+          title="Recently Played"
+          groupKey="recently-played"
+          query={{
+            isPending: false,
+            isError: false,
+            isFetching: true,
+            data: { items: [{ id: "1", title: "A", artist: "B" }] },
+            refetch: vi.fn(),
+          } as never}
+        >
+          {(items) => <p>{items.length} albums shown</p>}
+        </LibraryGroupSection>
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("1 albums shown")).toBeInTheDocument();
+    expect(container.querySelector("svg.lucide-loader-circle")).toBeNull();
   });
 });

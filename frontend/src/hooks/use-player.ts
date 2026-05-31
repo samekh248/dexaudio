@@ -21,6 +21,7 @@ import {
   onPlaybackStop,
   onTrackWillChange,
 } from "@/lib/plex-playback-reporter.js";
+import { notifyAudibleAlbumChange } from "@/lib/recently-played-refresh-coordinator.js";
 
 import { ApiError } from "@/services/api-client.js";
 
@@ -73,6 +74,7 @@ export type LoadTrackOptions = {
 
 const PREMATURE_END_MIN_DURATION_MS = 15_000;
 const PREMATURE_END_END_TOLERANCE_MS = 3_000;
+const RECENTLY_PLAYED_TRACE_PREFIX = "[recently-played-refresh]";
 
 export function isPrematureEndedPlayback(positionMs: number, knownDurationMs: number): boolean {
   return (
@@ -117,6 +119,27 @@ export function usePlayerState() {
 
   const transitionStyle = usePlaybackPrefs((s) => s.transition);
   const crossfadeDurationSec = usePlaybackPrefs((s) => s.crossfadeDurationSec);
+
+  const notifyRecentlyPlayedOnPlay = useCallback((track: Track) => {
+    const albumId = track.albumId;
+    if (!albumId) {
+      if (import.meta.env.DEV) {
+        console.debug(`${RECENTLY_PLAYED_TRACE_PREFIX} player_notify_skipped_missing_album`, {
+          trackId: track.id,
+          trackTitle: track.title,
+        });
+      }
+      return;
+    }
+    if (import.meta.env.DEV) {
+      console.debug(`${RECENTLY_PLAYED_TRACE_PREFIX} player_notify`, {
+        albumId,
+        trackId: track.id,
+        trackTitle: track.title,
+      });
+    }
+    notifyAudibleAlbumChange({ albumId, trackId: track.id });
+  }, []);
 
   const loading = isLoadingIndicatorStatus(status);
 
@@ -169,6 +192,9 @@ export function usePlayerState() {
     if (track && engineRef.current.state() === "loaded") {
       onPlaybackStop(track, engineRef.current.getPositionMs());
     }
+    // Ensure no previously created Howler instance can keep emitting audio
+    // when a fresh track is loaded (e.g. after remount/HMR edge cases).
+    Howler.stop();
     clearRecoveryTimer();
     engineRef.current.destroy();
     engineRef.current = createHowlerAudioEngine();
@@ -278,6 +304,7 @@ export function usePlayerState() {
         clearError();
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
         onPlaybackPlay(track, engine.getPositionMs());
+        notifyRecentlyPlayedOnPlay(track);
       },
       onPause: () => {
         if (loadIdRef.current !== loadId) return;
@@ -357,7 +384,7 @@ export function usePlayerState() {
         }
       },
     }),
-    [clearError, applyMachine, scheduleRecovery, handleTerminalFailure],
+    [clearError, applyMachine, scheduleRecovery, handleTerminalFailure, notifyRecentlyPlayedOnPlay],
   );
 
   const bindEngine = useCallback(
@@ -615,7 +642,8 @@ export function usePlayerState() {
     }
     engineRef.current.play();
     if (track) onPlaybackPlay(track, engineRef.current.getPositionMs());
-  }, [clearError, applyMachine]);
+    if (track) notifyRecentlyPlayedOnPlay(track);
+  }, [clearError, applyMachine, notifyRecentlyPlayedOnPlay]);
 
   const pause = useCallback(() => {
     const track = currentTrackRef.current;
@@ -731,6 +759,23 @@ export function usePlayerState() {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [status, scheduleRecovery]);
+
+  useEffect(() => {
+    return () => {
+      clearRecoveryTimer();
+      if (seekDebounceRef.current) {
+        clearTimeout(seekDebounceRef.current);
+        seekDebounceRef.current = null;
+      }
+      if (positionPersistRef.current) {
+        clearInterval(positionPersistRef.current);
+        positionPersistRef.current = null;
+      }
+      cancelStagedPreloads();
+      Howler.stop();
+      engineRef.current.destroy();
+    };
+  }, [cancelStagedPreloads, clearRecoveryTimer]);
 
   return {
     playing,

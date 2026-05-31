@@ -2,12 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PlexConfig } from "../../src/services/plex/plex-client.js";
 import type { AlbumWithStats } from "../../src/services/plex/plex-client.js";
 import * as plexClient from "../../src/services/plex/plex-client.js";
-import * as libraryService from "../../src/services/plex/library-service.js";
 import * as spotlightRepo from "../../src/services/plex/artist-spotlight-repo.js";
-import {
-  selectHiddenGems,
-  selectRecentlyPlayed,
-} from "../../src/services/plex/album-groups-service.js";
+import { selectHiddenGems } from "../../src/services/plex/album-groups-service.js";
 import * as targeted from "../../src/services/plex/targeted-library-service.js";
 
 const config = { serverUrl: "http://plex.local", token: "tok" } as PlexConfig;
@@ -57,50 +53,47 @@ describe("targeted-library-service", () => {
     expect(targeted.sliceItems(items, 20)).toHaveLength(20);
   });
 
-  it("recently-played uses lastViewedAt sort plus bounded play counts", async () => {
-    const now = new Date("2026-05-19T12:00:00Z").getTime();
-    vi.spyOn(plexClient, "fetchAlbumPlayCounts30dBounded").mockResolvedValue(
-      new Map([
-        ["1", 1],
-        ["2", 5],
-      ]),
-    );
-    vi.spyOn(plexClient, "fetchAlbumsSorted").mockResolvedValue({
+  it("recently-played uses lastViewedAt sort only", async () => {
+    const older = new Date("2026-05-01T12:00:00Z");
+    const newer = new Date("2026-05-19T12:00:00Z");
+    const sorted = vi.spyOn(plexClient, "fetchAlbumsSorted").mockResolvedValue({
       items: [
-        album({ id: "2", title: "B", artist: "X", lastPlayedAt: new Date(now) }),
-        album({ id: "1", title: "A", artist: "X", lastPlayedAt: new Date(now) }),
+        album({ id: "2", title: "B", artist: "X", lastPlayedAt: newer }),
+        album({ id: "1", title: "A", artist: "X", lastPlayedAt: older }),
       ],
       total: 2,
     });
+    const playCounts = vi.spyOn(plexClient, "fetchAlbumPlayCounts30dBounded");
     const metadataBatch = vi.spyOn(plexClient, "fetchAlbumMetadataBatch");
-    const fullPlayCounts = vi.spyOn(libraryService, "getAlbumPlayCounts30d");
 
     const result = await targeted.loadRecentlyPlayedProfile(config, "lib-1");
     expect(result.map((a) => a.id)).toEqual(["2", "1"]);
-    expect(plexClient.fetchAlbumsSorted).toHaveBeenCalledWith(config, "lib-1", {
+    expect(sorted).toHaveBeenCalledWith(config, "lib-1", {
       sort: "lastViewedAt:desc",
       start: 0,
-      size: targeted.RECENTLY_PLAYED_SORT_SIZE,
+      size: targeted.GROUP_FETCH_SIZE,
     });
-    expect(fullPlayCounts).not.toHaveBeenCalled();
+    expect(playCounts).not.toHaveBeenCalled();
     expect(metadataBatch).not.toHaveBeenCalled();
   });
 
-  it("recently-played fetches metadata only for top plays missing from sorted page", async () => {
-    const now = new Date("2026-05-19T12:00:00Z").getTime();
-    vi.spyOn(plexClient, "fetchAlbumPlayCounts30dBounded").mockResolvedValue(
-      new Map([["99", 10]]),
-    );
+  it("recently-played falls back to bounded scan when sorted fetch is empty", async () => {
     vi.spyOn(plexClient, "fetchAlbumsSorted").mockResolvedValue({ items: [], total: 0 });
-    const metadataBatch = vi
-      .spyOn(plexClient, "fetchAlbumMetadataBatch")
-      .mockResolvedValue([
-        album({ id: "99", title: "Hot", artist: "X", lastPlayedAt: new Date(now) }),
-      ]);
+    const paginated = vi.spyOn(plexClient, "fetchAlbums").mockResolvedValue({
+      items: [
+        album({
+          id: "1",
+          title: "A",
+          artist: "X",
+          lastPlayedAt: new Date("2026-05-19T12:00:00Z"),
+        }),
+      ],
+      total: 1,
+    });
 
     const result = await targeted.loadRecentlyPlayedProfile(config, "lib-1");
-    expect(metadataBatch).toHaveBeenCalledWith(config, ["99"]);
-    expect(result.map((a) => a.id)).toEqual(["99"]);
+    expect(paginated).toHaveBeenCalled();
+    expect(result.map((a) => a.id)).toEqual(["1"]);
   });
 
   it("hidden-gems filters rating and neglect from sorted pull", async () => {

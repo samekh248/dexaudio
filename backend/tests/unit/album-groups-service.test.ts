@@ -33,13 +33,15 @@ function album(
 describe("album-groups-service selection", () => {
   const now = new Date("2026-05-19T12:00:00Z").getTime();
 
-  it("selects recently played by 30-day play count", () => {
+  it("selects recently played by last played time (newest first)", () => {
+    const older = new Date("2026-05-01T12:00:00Z");
+    const newer = new Date("2026-05-19T12:00:00Z");
     const albums = [
-      album({ id: "1", title: "A", artist: "X", playCount30d: 1 }),
-      album({ id: "2", title: "B", artist: "X", playCount30d: 5, lastPlayedAt: new Date(now) }),
-      album({ id: "3", title: "C", artist: "X", playCount30d: 0 }),
+      album({ id: "1", title: "A", artist: "X", lastPlayedAt: older }),
+      album({ id: "2", title: "B", artist: "X", lastPlayedAt: newer }),
+      album({ id: "3", title: "C", artist: "X" }),
     ];
-    const result = selectRecentlyPlayed(albums, now);
+    const result = selectRecentlyPlayed(albums);
     expect(result.map((a) => a.id)).toEqual(["2", "1"]);
   });
 

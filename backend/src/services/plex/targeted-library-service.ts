@@ -22,15 +22,6 @@ export const FALLBACK_SCAN_CAP = 500;
 export const RANDOM_POOL_RECENT = 300;
 export const RANDOM_POOL_ALPHA = 300;
 export const CACHE_TTL_MS = 60_000;
-/** Album candidates from one lastViewedAt-sorted Plex request. */
-export const RECENTLY_PLAYED_SORT_SIZE = 80;
-/** Max track-list pages for 30-day play aggregation on the hot path. */
-export const PLAY_COUNT_30D_MAX_PAGES = 2;
-export const PLAY_COUNT_30D_STOP_ALBUMS = 60;
-/** Metadata fetches only for high-play albums missing from the sorted page. */
-export const RECENTLY_PLAYED_METADATA_CAP = 15;
-
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type LibraryQueryProfile =
   | "recently-added"
@@ -56,6 +47,15 @@ export function clearProfileCache(): void {
   spotlightCache.clear();
   profileInFlight.clear();
   spotlightInFlight.clear();
+}
+
+export function invalidateRecentlyPlayedProfileCache(): void {
+  for (const key of [...profileCache.keys()]) {
+    if (key.endsWith(":profile:recently-played")) profileCache.delete(key);
+  }
+  for (const key of [...profileInFlight.keys()]) {
+    if (key.endsWith(":profile:recently-played")) profileInFlight.delete(key);
+  }
 }
 
 async function dedupeInFlight<T>(
@@ -145,54 +145,15 @@ export async function loadRecentlyPlayedProfile(
   libraryId: string,
 ): Promise<AlbumWithStats[]> {
   return loadCachedProfile("recently-played", config, libraryId, async () => {
-    try {
-      const neglectBefore = Date.now() - THIRTY_DAYS_MS;
-      const [recentPage, playCounts30d] = await Promise.all([
-        plexClient.fetchAlbumsSorted(config, libraryId, {
-          sort: "lastViewedAt:desc",
-          start: 0,
-          size: RECENTLY_PLAYED_SORT_SIZE,
-        }),
-        plexClient.fetchAlbumPlayCounts30dBounded(config, libraryId, {
-          maxPages: PLAY_COUNT_30D_MAX_PAGES,
-          stopWhenAlbums: PLAY_COUNT_30D_STOP_ALBUMS,
-        }),
-      ]);
-
-      const byId = new Map<string, AlbumWithStats>();
-      for (const album of recentPage.items) {
-        const playedAt = album.lastPlayedAt?.getTime();
-        if (playedAt === undefined || playedAt < neglectBefore) continue;
-        album.playCount30d = playCounts30d.get(album.id) ?? 1;
-        byId.set(album.id, album);
-      }
-
-      const missingTopIds = [...playCounts30d.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([id]) => id)
-        .filter((id) => !byId.has(id))
-        .slice(0, RECENTLY_PLAYED_METADATA_CAP);
-
-      if (missingTopIds.length > 0) {
-        const extras = await plexClient.fetchAlbumMetadataBatch(config, missingTopIds);
-        for (const album of extras) {
-          const count = playCounts30d.get(album.id) ?? 0;
-          if (count <= 0) continue;
-          album.playCount30d = count;
-          byId.set(album.id, album);
-        }
-      }
-
-      if (byId.size === 0) {
-        const scanned = await scanAlbumsBounded(config, libraryId, FALLBACK_SCAN_CAP);
-        return selectRecentlyPlayed(scanned, GROUP_FETCH_SIZE);
-      }
-
-      return selectRecentlyPlayed([...byId.values()], GROUP_FETCH_SIZE);
-    } catch {
-      const scanned = await scanAlbumsBounded(config, libraryId, FALLBACK_SCAN_CAP);
-      return selectRecentlyPlayed(scanned, GROUP_FETCH_SIZE);
-    }
+    const remote = await tryFetchAlbumsSorted(
+      config,
+      libraryId,
+      "lastViewedAt:desc",
+      GROUP_FETCH_SIZE,
+    );
+    if (remote) return selectRecentlyPlayed(remote, GROUP_FETCH_SIZE);
+    const scanned = await scanAlbumsBounded(config, libraryId, FALLBACK_SCAN_CAP);
+    return selectRecentlyPlayed(scanned, GROUP_FETCH_SIZE);
   });
 }
 
