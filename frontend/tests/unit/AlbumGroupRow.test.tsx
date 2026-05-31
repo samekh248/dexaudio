@@ -133,6 +133,30 @@ describe("AlbumGroupRow", () => {
 
     expect(screen.queryByRole("button", { name: "Scroll left" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Scroll right" })).toBeInTheDocument();
+    expect(screen.getByTestId("carousel-nav-left")).toHaveClass("invisible");
+    expect(screen.getByTestId("carousel-nav-right")).not.toHaveClass("invisible");
+    expect(screen.getByTestId("carousel-right-fade")).toBeInTheDocument();
+  });
+
+  it("hides right fade when all entries fit on screen", () => {
+    render(
+      <AlbumGroupRow
+        title="Fits"
+        entries={[
+          <span key="1" data-width="80">
+            A
+          </span>,
+          <span key="2" data-width="80">
+            B
+          </span>,
+        ]}
+      />,
+    );
+    const region = screen.getByRole("region", { name: "Fits carousel" });
+    applyFitsOnScreen(region);
+    fireEvent.scroll(region);
+
+    expect(screen.queryByTestId("carousel-right-fade")).not.toBeInTheDocument();
   });
 
   it("uses fully visible count for mixed-width children", () => {
@@ -183,6 +207,8 @@ describe("AlbumGroupRow", () => {
 
     expect(screen.queryByRole("button", { name: "Scroll left" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Scroll right" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("carousel-nav-left")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("carousel-nav-right")).not.toBeInTheDocument();
   });
 
   it("provides keyboard-focusable scroll buttons with aria labels", () => {
