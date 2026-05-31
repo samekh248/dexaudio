@@ -7,6 +7,7 @@ const track = {
   title: "Track One",
   artist: "Artist A",
   album: "Album",
+  albumId: "50",
   durationMs: 200000,
   format: "mp3" as const,
 };
@@ -78,6 +79,34 @@ describe("NowPlayingControlPanel", () => {
   it("shows marquee artist - track text", () => {
     renderPanel();
     expect(screen.getByTestId("marquee-display")).toHaveTextContent("Artist A - Track One");
+  });
+
+  it("shows left-aligned album art beside track info", () => {
+    renderPanel();
+    const region = screen.getByRole("region", { name: "Playback controls" });
+    const art = within(region).getByTestId("panel-track-art");
+    expect(region.querySelector(".relative.z-10")).toContainElement(art);
+    expect(art.querySelector("img")).toHaveAttribute(
+      "src",
+      "/api/v1/plex/photo?path=%2Flibrary%2Fmetadata%2F50%2Fthumb",
+    );
+  });
+
+  it("uses blurred album art as the popup background", () => {
+    renderPanel();
+    const region = screen.getByRole("region", { name: "Playback controls" });
+    const background = within(region).getByTestId("panel-art-background");
+    expect(background).toHaveClass("blur-md", "opacity-45");
+    expect(background).toHaveAttribute(
+      "src",
+      "/api/v1/plex/photo?path=%2Flibrary%2Fmetadata%2F50%2Fthumb",
+    );
+  });
+
+  it("reserves bottom padding for control helper labels", () => {
+    renderPanel();
+    const region = screen.getByRole("region", { name: "Playback controls" });
+    expect(region).toHaveClass("pb-8");
   });
 
   it("hides visible text labels until control is hovered", () => {
