@@ -1,4 +1,5 @@
 import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import type { AudioQuality, TrackFormat } from "@dexaudio/shared-types";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { VolumeControl } from "@/components/player/VolumeControl";
@@ -8,7 +9,9 @@ interface AudioPlayerProps {
   position: number;
   duration: number;
   volume: number;
+  trackFormat?: TrackFormat;
   fromCache?: boolean;
+  playbackQuality?: AudioQuality | null;
   loading?: boolean;
   status?: "idle" | "loading" | "ready" | "playing" | "paused" | "buffering" | "recovering" | "ended" | "failed";
   onPlay: () => void;
@@ -30,7 +33,9 @@ export function AudioPlayer({
   position,
   duration,
   volume,
+  trackFormat,
   fromCache,
+  playbackQuality,
   loading,
   status,
   onPlay,
@@ -42,9 +47,19 @@ export function AudioPlayer({
 }: AudioPlayerProps) {
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-      {fromCache !== undefined && (
-        <span className="text-xs text-muted-foreground">{fromCache ? "Cached" : "Streaming"}</span>
-      )}
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {trackFormat && (
+          <span aria-label={`File format: ${trackFormat}`}>{trackFormat.toUpperCase()}</span>
+        )}
+        {fromCache !== undefined && (
+          <span>{fromCache ? "Cached" : "Streaming"}</span>
+        )}
+        {playbackQuality && (
+          <span aria-label={`Audio quality: ${playbackQuality}`}>
+            {playbackQuality === "lossless" ? "Lossless" : "Transcoded"}
+          </span>
+        )}
+      </div>
       <Slider
         value={[position]}
         max={duration || 1}

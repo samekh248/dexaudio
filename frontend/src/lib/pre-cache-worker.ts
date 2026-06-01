@@ -2,6 +2,8 @@ import type { Track } from "@dexaudio/shared-types";
 import { writeToCache } from "./cache-service.js";
 import { buildGaplessSlots } from "./gapless-cache-slots.js";
 import { getItem, isGaplessPlaybackEnabled, StorageKeys } from "./local-storage.js";
+import { isLosslessEnabled } from "./lossless-prefs-store.js";
+import { isLosslessCandidateFormat } from "./audio-capability.js";
 import { fetchTrackAudioBlob } from "./stream-audio.js";
 
 async function cacheTrack(
@@ -11,7 +13,8 @@ async function cacheTrack(
 ): Promise<void> {
   if (track.format === "unsupported") return;
   try {
-    const blob = await fetchTrackAudioBlob(track.id);
+    const requestLossless = isLosslessEnabled() && isLosslessCandidateFormat(track.format);
+    const { blob } = await fetchTrackAudioBlob(track.id, { lossless: requestLossless });
     if (isStale()) return;
     const versionSignal = `${track.id}-${blob.size}`;
     await writeToCache(track.id, blob, versionSignal, "pre-cache", false, protectedKeys);

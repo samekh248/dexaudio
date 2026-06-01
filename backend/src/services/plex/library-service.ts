@@ -107,9 +107,7 @@ export async function searchLibrary(
     const album = plexClient.parseAlbumFromMetadata(attrs);
     albums.push({ ...album, artUrl: proxyArtUrl(album.artUrl) });
   }
-  const trackRegex = /<Track\b([^>]*?)\/?>/g;
-  while ((m = trackRegex.exec(xml)) !== null) {
-    const track = plexClient.parseTrackFromMetadata(parseAttrs(m[1]));
+  for (const track of plexClient.parseTracksFromContainerXml(xml)) {
     tracks.push({ ...track, artUrl: proxyArtUrl(track.artUrl) });
   }
   return { albums, tracks };

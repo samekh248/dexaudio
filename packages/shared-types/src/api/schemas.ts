@@ -19,6 +19,14 @@ export const TrackFormatSchema = z.enum([
 ]);
 export type TrackFormat = z.infer<typeof TrackFormatSchema>;
 
+export const AudioQualitySchema = z.enum(["lossless", "transcoded"]);
+export type AudioQuality = z.infer<typeof AudioQualitySchema>;
+
+export const StreamQuerySchema = z.object({
+  quality: z.enum(["auto", "lossless"]).optional(),
+});
+export type StreamQuery = z.infer<typeof StreamQuerySchema>;
+
 export const PlaybackErrorCategorySchema = z.enum([
   "unsupported_format",
   "server_unreachable",

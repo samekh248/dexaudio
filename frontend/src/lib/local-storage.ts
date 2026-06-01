@@ -7,6 +7,8 @@ export const StorageKeys = {
   crossfade: `${PREFIX}playback.crossfade`,
   /** Client prefs: specs/005-gapless-playback/contracts/playback-preferences.yaml */
   gaplessPlayback: `${PREFIX}playback.gapless`,
+  /** Client prefs: specs/020-flac-lossless-playback/contracts/lossless-preference.md */
+  losslessPlayback: `${PREFIX}playback.lossless`,
   /** Client prefs: specs/013-play-navigation-preference/contracts/playback-preferences.yaml */
   playNavigation: `${PREFIX}playback.playNavigation`,
   preCacheLookAhead: `${PREFIX}playback.preCacheLookAhead`,

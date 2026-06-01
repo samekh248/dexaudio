@@ -1,11 +1,13 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { AppError, BadGatewayError, NotFoundError } from "../../lib/errors.js";
+import type { AudioQuality } from "@dexaudio/shared-types";
+import { StreamQuerySchema } from "@dexaudio/shared-types";
+import { AppError, BadGatewayError, NotFoundError, ValidationError } from "../../lib/errors.js";
 import * as plexConn from "../../services/plex/plex-connection-service.js";
 import type { PlexConfig } from "../../services/plex/plex-client.js";
 import {
-  fetchTrackMetadata,
-  getStreamUrl,
+  fetchTrackStreamContext,
+  getDirectStreamUrl,
   getTranscodeUrl,
   isBrowserNativeFormat,
   plexMediaHeaders,
@@ -17,7 +19,12 @@ function isPlayableContentType(contentType: string): boolean {
   if (ct.includes("video") || ct.includes("text/html")) return false;
   if (ct.includes("json") || ct.includes("xml")) return false;
   if (ct.includes("mpegurl") || ct.includes("dash")) return false;
-  return ct.includes("audio") || ct.includes("octet-stream") || ct.includes("mpeg");
+  return (
+    ct.includes("audio") ||
+    ct.includes("octet-stream") ||
+    ct.includes("mpeg") ||
+    ct.includes("flac")
+  );
 }
 
 /**
@@ -81,6 +88,42 @@ async function proxyStream(
   };
 }
 
+type StreamCandidate = {
+  url: string;
+  quality: AudioQuality;
+};
+
+function buildStreamCandidates(
+  config: PlexConfig,
+  trackId: string,
+  track: Awaited<ReturnType<typeof fetchTrackStreamContext>>["track"],
+  wantLossless: boolean,
+  partKey?: string,
+): StreamCandidate[] {
+  const direct = getDirectStreamUrl(config, trackId, partKey);
+  const transcode = getTranscodeUrl(config, trackId);
+
+  // Client explicitly requested lossless — always try the original file first.
+  if (wantLossless) {
+    return [
+      { url: direct, quality: "lossless" },
+      { url: transcode, quality: "transcoded" },
+    ];
+  }
+
+  if (!track || !isBrowserNativeFormat(track.format)) {
+    return [
+      { url: transcode, quality: "transcoded" },
+      { url: direct, quality: "transcoded" },
+    ];
+  }
+
+  return [
+    { url: direct, quality: "transcoded" },
+    { url: transcode, quality: "transcoded" },
+  ];
+}
+
 export async function streamRoutes(app: FastifyInstance) {
   app.get("/plex/photo", async (request, reply) => {
     const { path: plexPath } = z.object({ path: z.string().startsWith("/") }).parse(request.query);
@@ -100,6 +143,11 @@ export async function streamRoutes(app: FastifyInstance) {
 
   app.get("/stream/:trackId", async (request, reply) => {
     const { trackId } = z.object({ trackId: z.string() }).parse(request.params);
+    const queryParsed = StreamQuerySchema.safeParse(request.query);
+    if (!queryParsed.success) {
+      throw new ValidationError("Invalid stream query parameters");
+    }
+    const wantLossless = queryParsed.data.quality === "lossless";
     const rangeHeaderRaw = request.headers.range;
     const rangeHeader = Array.isArray(rangeHeaderRaw) ? rangeHeaderRaw[0] : rangeHeaderRaw;
     const seeking = isSeekRequest(rangeHeader);
@@ -108,8 +156,11 @@ export async function streamRoutes(app: FastifyInstance) {
     if (!config) throw new NotFoundError("Plex not connected");
 
     let track;
+    let partKey: string | undefined;
     try {
-      track = await fetchTrackMetadata(config, trackId);
+      const ctx = await fetchTrackStreamContext(config, trackId);
+      track = ctx.track;
+      partKey = ctx.partKey;
     } catch {
       throw new BadGatewayError(
         "Could not reach Plex server",
@@ -117,17 +168,10 @@ export async function streamRoutes(app: FastifyInstance) {
       );
     }
 
-    const streamUrls: string[] = [];
-    if (!track || !isBrowserNativeFormat(track.format)) {
-      streamUrls.push(getTranscodeUrl(config, trackId));
-      streamUrls.push(getStreamUrl(config, trackId));
-    } else {
-      streamUrls.push(getStreamUrl(config, trackId));
-      streamUrls.push(getTranscodeUrl(config, trackId));
-    }
+    const streamCandidates = buildStreamCandidates(config, trackId, track, wantLossless, partKey);
 
-    for (const streamUrl of streamUrls) {
-      const result = await proxyStream(config, streamUrl, seekRange);
+    for (const candidate of streamCandidates) {
+      const result = await proxyStream(config, candidate.url, seekRange);
       if (!result.ok) {
         if (result.status === 401) {
           throw new AppError(
@@ -145,6 +189,7 @@ export async function streamRoutes(app: FastifyInstance) {
       reply.header("content-type", result.contentType);
       reply.header("accept-ranges", "bytes");
       reply.header("cache-control", "no-store");
+      reply.header("x-dexaudio-audio-quality", candidate.quality);
       // Only echo partial-response metadata for real seeks. On the initial full
       // load we send a plain 200 with no Content-Length so the browser streams
       // to the true end of the (possibly transcoded) audio instead of stopping
