@@ -1,22 +1,25 @@
 import { useEffect } from "react";
-import { getThemeMode } from "@/lib/local-storage.js";
+import { applyDataTheme } from "@/lib/theme-engine";
+import { useThemeStore } from "@/lib/theme-store";
 
 export function useThemeSync() {
+  const themeMode = useThemeStore((s) => s.themeMode);
+
   useEffect(() => {
+    useThemeStore.getState().bootstrap();
+  }, []);
+
+  useEffect(() => {
+    if (themeMode !== "sync") return;
+
     const apply = () => {
-      const mode = getThemeMode();
-      const root = document.documentElement;
-      if (mode === "sync") {
-        const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-        root.setAttribute("data-theme", dark ? "dark" : "light");
-      } else {
-        root.setAttribute("data-theme", mode === "custom" ? "dark" : mode);
-      }
+      const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      applyDataTheme("sync", dark);
     };
 
     apply();
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
-  }, []);
+  }, [themeMode]);
 }
