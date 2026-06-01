@@ -22,6 +22,7 @@ function initialPhase(artUrl: string | undefined): CoverLoadPhase {
 export function useAlbumCoverLoad(artUrl: string | undefined) {
   const imageRef = useRef<HTMLImageElement>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const trackedArtUrlRef = useRef<string | undefined>(undefined);
   const [phase, setPhase] = useState<CoverLoadPhase>(() => initialPhase(artUrl));
 
   const clearLoadTimeout = useCallback(() => {
@@ -33,28 +34,46 @@ export function useAlbumCoverLoad(artUrl: string | undefined) {
 
   const startReveal = useCallback(() => {
     clearLoadTimeout();
-    setPhase("revealing");
+    setPhase((current) => (current === "pending" ? "revealing" : current));
   }, [clearLoadTimeout]);
 
   const failLoad = useCallback(() => {
     clearLoadTimeout();
-    setPhase("failed");
+    setPhase((current) => {
+      if (current === "revealed" || current === "absent") return current;
+      return "failed";
+    });
   }, [clearLoadTimeout]);
 
   useEffect(() => {
     clearLoadTimeout();
     if (!artUrl) {
+      trackedArtUrlRef.current = undefined;
       setPhase("absent");
       return;
     }
+
+    const artUrlChanged = trackedArtUrlRef.current !== artUrl;
+    trackedArtUrlRef.current = artUrl;
+
     if (REVEALED_URL_CACHE.has(artUrl)) {
       setPhase("revealed");
       return;
     }
-    setPhase("pending");
-    timeoutRef.current = setTimeout(failLoad, COVER_LOAD_TIMEOUT_MS);
+
+    if (artUrlChanged) {
+      setPhase("pending");
+    }
+
+    timeoutRef.current = setTimeout(() => {
+      setPhase((current) => {
+        if (current === "pending" || current === "revealing") return "failed";
+        return current;
+      });
+    }, COVER_LOAD_TIMEOUT_MS);
+
     return clearLoadTimeout;
-  }, [artUrl, clearLoadTimeout, failLoad]);
+  }, [artUrl, clearLoadTimeout]);
 
   useEffect(() => {
     const img = imageRef.current;

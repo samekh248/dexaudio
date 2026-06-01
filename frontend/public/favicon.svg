@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Compact disc">
+  <rect width="64" height="64" rx="14" fill="#0f172a"/>
+  <circle cx="32" cy="32" r="24" fill="#cbd5e1"/>
+  <circle cx="32" cy="32" r="24" fill="none" stroke="url(#shine)" stroke-width="2.5" opacity="0.85"/>
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#94a3b8" stroke-width="0.75" opacity="0.35"/>
+  <circle cx="32" cy="32" r="14" fill="none" stroke="#94a3b8" stroke-width="0.75" opacity="0.25"/>
+  <circle cx="32" cy="32" r="7" fill="#0f172a" stroke="#64748b" stroke-width="1.25"/>
+  <defs>
+    <linearGradient id="shine" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="25%" stop-color="#a78bfa"/>
+      <stop offset="50%" stop-color="#38bdf8"/>
+      <stop offset="75%" stop-color="#34d399"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -29,6 +29,7 @@ function PanelArtBackground({ artSrc }: { artSrc: string | undefined }) {
 
   return (
     <>
+      <div className="absolute inset-0 bg-card" aria-hidden />
       <img
         src={artSrc}
         alt=""
@@ -36,7 +37,6 @@ function PanelArtBackground({ artSrc }: { artSrc: string | undefined }) {
         className="absolute inset-0 h-full w-full scale-110 object-cover opacity-45 blur-md"
         data-testid="panel-art-background"
       />
-      <div className="absolute inset-0 bg-black/45" aria-hidden />
     </>
   );
 }

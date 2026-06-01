@@ -25,7 +25,12 @@ export function AppShell() {
     <div className="flex min-h-screen min-w-0 flex-col">
       <header className="fixed inset-x-0 top-0 z-50 border-b border-border bg-card/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-          <Link to="/" className="shrink-0 text-lg font-bold tracking-tight">
+          <Link
+            to="/"
+            className="inline-flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight"
+            aria-label="Dexaudio home"
+          >
+            <img src="/favicon.svg" alt="" className="h-7 w-7 shrink-0" width={28} height={28} />
             Dexaudio
           </Link>
           <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
