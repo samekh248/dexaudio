@@ -10,6 +10,7 @@ import {
   plexConnections,
   plexTimelineOutbox,
   scrobbleOutbox,
+  scrobbles,
 } from "../../db/schema.js";
 
 type Db = ReturnType<typeof getDb>;
@@ -28,7 +29,10 @@ export async function resetTargets(db: Db, targets: ResetTarget[]) {
     await db.delete(discogsReleases);
     await db.delete(collectionMatches);
   }
-  if (all || targets.includes("lastfm")) await db.delete(lastfmAccounts);
+  if (all || targets.includes("lastfm")) {
+    await db.delete(scrobbles);
+    await db.delete(lastfmAccounts);
+  }
   if (all || targets.includes("collection")) {
     await db.delete(collectionMatches);
     await db.delete(discogsReleases);

@@ -1,0 +1,273 @@
+openapi: 3.1.0
+info:
+  title: Listening Stats Dashboard API
+  version: 1.0.0
+  description: >
+    REST endpoints (under /api/v1) for the Last.fm-primary / Plex-fallback
+    listening stats dashboard. Sync is fully automatic (no manual trigger
+    endpoint): backfill starts on connecting a username, incremental syncs run
+    on a scheduled background interval.
+servers:
+  - url: /api/v1
+
+paths:
+  /lastfm/connection:
+    put:
+      summary: Connect / update the Last.fm account (session key and/or username)
+      description: >
+        Extends the existing endpoint to accept an optional `username`. When a
+        username is saved and no prior history exists, a full background backfill
+        is started fire-and-forget (FR-013, FR-014). At least one of `sessionKey`
+        or `username` must be provided.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LastfmConnectionInput'
+      responses:
+        '200':
+          description: Connection saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  connected:
+                    type: boolean
+                required: [connected]
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /stats/overview:
+    get:
+      summary: Overview totals + Top 10 artists/albums/tracks for a period
+      parameters:
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/Tz'
+      responses:
+        '200':
+          description: Overview (Last.fm if local scrobbles exist, else Plex fallback)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListeningOverview'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /stats/patterns:
+    get:
+      summary: Time-distribution patterns (series, clock, weekday, calendar)
+      description: >
+        Buckets are computed in the supplied viewer time zone (FR-011a).
+        Pattern data is Last.fm-only (Plex viewCount has no timestamps); when the
+        resolved source is Plex, arrays are empty and `source` is `plex`.
+      parameters:
+        - $ref: '#/components/parameters/Period'
+        - $ref: '#/components/parameters/Tz'
+        - name: granularity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [day, week, month]
+          description: Optional override; server auto-selects when omitted.
+      responses:
+        '200':
+          description: Listening patterns for the period
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListeningPatterns'
+        '400':
+          $ref: '#/components/responses/Error'
+
+  /stats/sync/status:
+    get:
+      summary: Last.fm sync status and progress
+      responses:
+        '200':
+          description: Current sync status (FR-018)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LastfmSyncStatus'
+
+  /stats/top:
+    get:
+      summary: (Existing) Plex top stats — retained as the fallback source
+      responses:
+        '200':
+          description: Plex-derived top songs/albums/artists
+          content:
+            application/json:
+              schema:
+                type: object
+                description: Existing TopStats shape (unchanged).
+
+components:
+  parameters:
+    Period:
+      name: period
+      in: query
+      required: true
+      schema:
+        $ref: '#/components/schemas/StatsPeriod'
+    Tz:
+      name: tz
+      in: query
+      required: false
+      description: IANA time zone (e.g. America/Denver). Invalid/absent → UTC.
+      schema:
+        type: string
+        default: UTC
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+              code: { type: string }
+              action: { type: string }
+            required: [message]
+
+  schemas:
+    StatsPeriod:
+      type: string
+      enum: ['7d', '1m', '3m', '6m', '12m', 'all']
+
+    StatsSource:
+      type: string
+      enum: [lastfm, plex]
+
+    LastfmConnectionInput:
+      type: object
+      properties:
+        sessionKey:
+          type: string
+          minLength: 1
+        username:
+          type: string
+          minLength: 1
+      anyOf:
+        - required: [sessionKey]
+        - required: [username]
+
+    TopEntry:
+      type: object
+      properties:
+        label: { type: string }
+        sub: { type: string }
+        count: { type: integer, minimum: 0 }
+        imageUrl: { type: string }
+      required: [label, count]
+
+    ListeningOverview:
+      type: object
+      properties:
+        period: { $ref: '#/components/schemas/StatsPeriod' }
+        source: { $ref: '#/components/schemas/StatsSource' }
+        totalPlays: { type: integer, minimum: 0 }
+        totalPlaysAllTime: { type: integer, minimum: 0 }
+        uniqueArtists: { type: integer, minimum: 0 }
+        uniqueAlbums: { type: integer, minimum: 0 }
+        uniqueTracks: { type: integer, minimum: 0 }
+        avgPlaysPerDay: { type: number, minimum: 0 }
+        busiestDate:
+          type: object
+          nullable: true
+          properties:
+            date: { type: string, format: date }
+            count: { type: integer, minimum: 0 }
+          required: [date, count]
+        busiestWeekday:
+          type: object
+          nullable: true
+          properties:
+            weekday: { type: integer, minimum: 0, maximum: 6 }
+            count: { type: integer, minimum: 0 }
+          required: [weekday, count]
+        topArtists:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/TopEntry' }
+        topAlbums:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/TopEntry' }
+        topTracks:
+          type: array
+          maxItems: 10
+          items: { $ref: '#/components/schemas/TopEntry' }
+      required:
+        - period
+        - source
+        - totalPlays
+        - totalPlaysAllTime
+        - uniqueArtists
+        - uniqueAlbums
+        - uniqueTracks
+        - avgPlaysPerDay
+        - topArtists
+        - topAlbums
+        - topTracks
+
+    TimeSeriesPoint:
+      type: object
+      properties:
+        bucket: { type: string, format: date }
+        count: { type: integer, minimum: 0 }
+      required: [bucket, count]
+
+    ListeningPatterns:
+      type: object
+      properties:
+        period: { $ref: '#/components/schemas/StatsPeriod' }
+        source: { $ref: '#/components/schemas/StatsSource' }
+        granularity:
+          type: string
+          enum: [day, week, month]
+        playsOverTime:
+          type: array
+          items: { $ref: '#/components/schemas/TimeSeriesPoint' }
+        clock:
+          type: array
+          description: Length 24, hour 0-23 (viewer-local).
+          items:
+            type: object
+            properties:
+              hour: { type: integer, minimum: 0, maximum: 23 }
+              count: { type: integer, minimum: 0 }
+            required: [hour, count]
+        weekday:
+          type: array
+          description: Length 7, weekday 0-6 (viewer-local).
+          items:
+            type: object
+            properties:
+              weekday: { type: integer, minimum: 0, maximum: 6 }
+              count: { type: integer, minimum: 0 }
+            required: [weekday, count]
+        calendar:
+          type: array
+          items: { $ref: '#/components/schemas/TimeSeriesPoint' }
+      required: [period, source, granularity, playsOverTime, clock, weekday, calendar]
+
+    LastfmSyncStatus:
+      type: object
+      properties:
+        connected: { type: boolean }
+        username: { type: string, nullable: true }
+        status:
+          type: string
+          enum: [idle, syncing, error]
+        lastSyncedAt: { type: string, format: date-time, nullable: true }
+        totalScrobbles: { type: integer, nullable: true }
+        syncedPages: { type: integer, minimum: 0 }
+        totalPages: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+      required: [connected, status, syncedPages]

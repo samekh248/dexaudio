@@ -8,6 +8,8 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  LASTFM_API_KEY: z.string().min(1).optional(),
+  LASTFM_API_SECRET: z.string().min(1).optional(),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
@@ -22,5 +24,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     APP_SECRET: env.APP_SECRET,
     PORT: env.PORT ?? "3001",
     GRAPHQL_ENABLED: env.GRAPHQL_ENABLED,
+    LASTFM_API_KEY: env.LASTFM_API_KEY,
+    LASTFM_API_SECRET: env.LASTFM_API_SECRET,
   });
 }

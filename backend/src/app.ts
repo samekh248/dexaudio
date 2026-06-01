@@ -29,6 +29,10 @@ export async function buildApp(config: AppConfig) {
   });
 
   await registerRoutes(app, config);
+
+  const { startLastfmSyncScheduler } = await import("./workers/lastfm-sync-scheduler.js");
+  startLastfmSyncScheduler(app);
+
   return app;
 }
 

@@ -24,6 +24,13 @@ import type {
   SearchResults,
   TopStats,
   Track,
+  StatsPeriod,
+  ListeningOverview,
+  ListeningPatterns,
+  LastfmSyncStatus,
+  LastfmConnectionInput,
+  LastfmAuthToken,
+  LastfmAuthStatus,
 } from "@dexaudio/shared-types";
 
 const API_BASE = "/api/v1";
@@ -119,6 +126,31 @@ export const api = {
     request<Track[]>(`/playback/similar?seedTrackId=${seedTrackId}&limit=${limit}`),
 
   getTopStats: () => request<TopStats>("/stats/top"),
+
+  getStatsOverview: (period: StatsPeriod, tz: string) =>
+    request<ListeningOverview>(
+      `/stats/overview?period=${encodeURIComponent(period)}&tz=${encodeURIComponent(tz)}`,
+    ),
+
+  getStatsPatterns: (period: StatsPeriod, tz: string) =>
+    request<ListeningPatterns>(
+      `/stats/patterns?period=${encodeURIComponent(period)}&tz=${encodeURIComponent(tz)}`,
+    ),
+
+  getLastfmSyncStatus: () => request<LastfmSyncStatus>("/stats/sync/status"),
+
+  saveLastfmConnection: (body: LastfmConnectionInput) =>
+    request<{ connected: boolean }>("/lastfm/connection", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  startLastfmAuth: () => request<LastfmAuthToken>("/lastfm/auth/token", { method: "POST" }),
+
+  getLastfmAuthStatus: (token: string) =>
+    request<LastfmAuthStatus>(`/lastfm/auth/status?token=${encodeURIComponent(token)}`),
+
+  disconnectLastfm: () => request<void>("/lastfm/connection", { method: "DELETE" }),
 
   getSettings: () => request<AppSettings>("/settings"),
   patchSettings: (patch: Partial<AppSettings>) =>

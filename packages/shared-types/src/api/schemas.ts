@@ -244,6 +244,114 @@ export const ScrobbleInputSchema = z.object({
 });
 export type ScrobbleInput = z.infer<typeof ScrobbleInputSchema>;
 
+export const StatsPeriodSchema = z.enum(["7d", "1m", "3m", "6m", "12m", "all"]);
+export type StatsPeriod = z.infer<typeof StatsPeriodSchema>;
+
+export const StatsSourceSchema = z.enum(["lastfm", "plex"]);
+export type StatsSource = z.infer<typeof StatsSourceSchema>;
+
+export const StatsGranularitySchema = z.enum(["day", "week", "month"]);
+export type StatsGranularity = z.infer<typeof StatsGranularitySchema>;
+
+export const TopEntrySchema = z.object({
+  label: z.string(),
+  sub: z.string().optional(),
+  count: z.number().int().nonnegative(),
+  imageUrl: z.string().optional(),
+});
+export type TopEntry = z.infer<typeof TopEntrySchema>;
+
+export const ListeningOverviewSchema = z.object({
+  period: StatsPeriodSchema,
+  source: StatsSourceSchema,
+  totalPlays: z.number().int().nonnegative(),
+  totalPlaysAllTime: z.number().int().nonnegative(),
+  uniqueArtists: z.number().int().nonnegative(),
+  uniqueAlbums: z.number().int().nonnegative(),
+  uniqueTracks: z.number().int().nonnegative(),
+  avgPlaysPerDay: z.number().nonnegative(),
+  busiestDate: z
+    .object({
+      date: z.string(),
+      count: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
+  busiestWeekday: z
+    .object({
+      weekday: z.number().int().min(0).max(6),
+      count: z.number().int().nonnegative(),
+    })
+    .nullable()
+    .optional(),
+  topArtists: z.array(TopEntrySchema).max(10),
+  topAlbums: z.array(TopEntrySchema).max(10),
+  topTracks: z.array(TopEntrySchema).max(10),
+});
+export type ListeningOverview = z.infer<typeof ListeningOverviewSchema>;
+
+export const TimeSeriesPointSchema = z.object({
+  bucket: z.string(),
+  count: z.number().int().nonnegative(),
+});
+export type TimeSeriesPoint = z.infer<typeof TimeSeriesPointSchema>;
+
+export const ListeningPatternsSchema = z.object({
+  period: StatsPeriodSchema,
+  source: StatsSourceSchema,
+  granularity: StatsGranularitySchema,
+  playsOverTime: z.array(TimeSeriesPointSchema),
+  clock: z.array(
+    z.object({
+      hour: z.number().int().min(0).max(23),
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+  weekday: z.array(
+    z.object({
+      weekday: z.number().int().min(0).max(6),
+      count: z.number().int().nonnegative(),
+    }),
+  ),
+  calendar: z.array(TimeSeriesPointSchema),
+});
+export type ListeningPatterns = z.infer<typeof ListeningPatternsSchema>;
+
+export const LastfmSyncStatusSchema = z.object({
+  connected: z.boolean(),
+  username: z.string().nullable().optional(),
+  status: z.enum(["idle", "syncing", "error"]),
+  lastSyncedAt: z.string().datetime().nullable().optional(),
+  totalScrobbles: z.number().int().nullable().optional(),
+  syncedPages: z.number().int().nonnegative(),
+  totalPages: z.number().int().nullable().optional(),
+  lastError: z.string().nullable().optional(),
+});
+export type LastfmSyncStatus = z.infer<typeof LastfmSyncStatusSchema>;
+
+export const LastfmAuthTokenSchema = z.object({
+  token: z.string(),
+  authUrl: z.string(),
+});
+export type LastfmAuthToken = z.infer<typeof LastfmAuthTokenSchema>;
+
+export const LastfmAuthStatusSchema = z.object({
+  authorized: z.boolean(),
+  expired: z.boolean(),
+  username: z.string().nullable().optional(),
+});
+export type LastfmAuthStatus = z.infer<typeof LastfmAuthStatusSchema>;
+
+export const LastfmConnectionInputSchema = z
+  .object({
+    sessionKey: z.string().min(1).optional(),
+    username: z.string().min(1).optional(),
+  })
+  .refine((v) => v.sessionKey != null || v.username != null, {
+    message: "At least one of sessionKey or username is required",
+  });
+export type LastfmConnectionInput = z.infer<typeof LastfmConnectionInputSchema>;
+
 export const TopStatsSchema = z.object({
   songs: z.array(
     z.object({
