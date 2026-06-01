@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import type {
   Album,
@@ -9,6 +9,8 @@ import type {
 } from "@dexaudio/shared-types";
 import { Button } from "@/components/ui/button";
 import { ViewAllLink } from "./ViewAllLink";
+import { LibraryGroupReveal } from "./LibraryGroupReveal";
+import type { GroupRevealPhase } from "@/hooks/use-library-group-reveal";
 
 type GroupItems = Album[] | ArtistSpotlight[];
 type GroupQueryResult = UseQueryResult<AlbumGroupResponse | ArtistSpotlightGroupResponse>;
@@ -16,6 +18,7 @@ type GroupQueryResult = UseQueryResult<AlbumGroupResponse | ArtistSpotlightGroup
 interface LibraryGroupSectionProps {
   title: string;
   groupKey: LibraryGroupKey;
+  libraryId: string;
   query: GroupQueryResult;
   showViewAll?: boolean;
   children: (items: GroupItems) => ReactNode;
@@ -24,13 +27,16 @@ interface LibraryGroupSectionProps {
 export function LibraryGroupSection({
   title,
   groupKey,
+  libraryId,
   query,
   showViewAll = true,
   children,
 }: LibraryGroupSectionProps) {
-  const { data, isPending, isError, refetch } = query;
+  const { data, isPending, isError, refetch, failureCount } = query;
+  const [revealPhase, setRevealPhase] = useState<GroupRevealPhase>("revealed");
 
   const headingId = `group-${title.replace(/\s+/g, "-").toLowerCase()}`;
+  const revealBusy = revealPhase !== "revealed";
 
   if (isPending) {
     return (
@@ -60,13 +66,26 @@ export function LibraryGroupSection({
   const items = data?.items ?? [];
   if (items.length === 0) return null;
 
+  const revealInstanceKey = `${groupKey}-${failureCount ?? 0}`;
+  const entryCount = groupKey === "random-picks" ? items.length + 1 : items.length;
+
   return (
-    <section className="mb-8" aria-labelledby={headingId}>
-      <h2 id={headingId} className="mb-3 text-lg font-semibold">
-        {title}
-      </h2>
-      {children(items)}
-      {showViewAll ? <ViewAllLink groupKey={groupKey} groupTitle={title} /> : null}
+    <section className="mb-8" aria-labelledby={headingId} aria-busy={revealBusy || undefined}>
+      <div className="mb-3 flex flex-wrap items-baseline gap-2">
+        <h2 id={headingId} className="text-lg font-semibold">
+          {title}
+        </h2>
+        {showViewAll ? <ViewAllLink groupKey={groupKey} groupTitle={title} /> : null}
+      </div>
+      <LibraryGroupReveal
+        key={revealInstanceKey}
+        libraryId={libraryId}
+        groupKey={groupKey}
+        entryCount={entryCount}
+        onPhaseChange={setRevealPhase}
+      >
+        {children(items)}
+      </LibraryGroupReveal>
     </section>
   );
 }

@@ -11,6 +11,7 @@ describe("ViewAllLink", () => {
       </MemoryRouter>,
     );
     const link = screen.getByRole("link", { name: /view all recently added/i });
+    expect(link).toHaveTextContent("(View all)");
     expect(link).toHaveAttribute("href", "/library/recently-added");
   });
 

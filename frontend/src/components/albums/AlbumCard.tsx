@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Album } from "@dexaudio/shared-types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 interface AlbumCardProps {
   album: Album;
+  onRevealCompleteChange?: (complete: boolean) => void;
 }
 
 function textVisibilityClass(phase: CoverLoadPhase): string {
@@ -23,13 +24,17 @@ function textVisibilityClass(phase: CoverLoadPhase): string {
   return "invisible opacity-0";
 }
 
-export function AlbumCard({ album }: AlbumCardProps) {
+export function AlbumCard({ album, onRevealCompleteChange }: AlbumCardProps) {
   const playAlbum = usePlayAlbum();
   const [coverPhase, setCoverPhase] = useState<CoverLoadPhase>(
     album.artUrl ? "pending" : "absent",
   );
   const revealComplete =
     coverPhase === "revealed" || coverPhase === "absent" || coverPhase === "failed";
+
+  useEffect(() => {
+    onRevealCompleteChange?.(revealComplete);
+  }, [revealComplete, onRevealCompleteChange]);
 
   return (
     <Card className="group relative w-[160px] shrink-0 overflow-hidden">
