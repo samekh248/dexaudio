@@ -10,6 +10,8 @@ import {
   jsonb,
   pgEnum,
   customType,
+  uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 
 const bytea = customType<{ data: Buffer; driverData: string }>({
@@ -29,6 +31,8 @@ const bytea = customType<{ data: Buffer; driverData: string }>({
 
 export const matchStatusEnum = pgEnum("match_status", ["matched", "partial", "not_on_plex"]);
 export const scrobbleStatusEnum = pgEnum("scrobble_status", ["pending", "submitted", "dropped"]);
+export const scrobbleSourceEnum = pgEnum("scrobble_source", ["lastfm", "plex"]);
+export const syncStatusEnum = pgEnum("sync_status", ["idle", "syncing", "error"]);
 
 export const plexConnections = pgTable("plex_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -81,7 +85,37 @@ export const lastfmAccounts = pgTable("lastfm_accounts", {
   sessionKeyEncrypted: bytea("session_key_encrypted"),
   connected: boolean("connected").default(false).notNull(),
   lastError: text("last_error"),
+  username: text("username"),
+  lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+  totalScrobbles: integer("total_scrobbles"),
+  syncStatus: syncStatusEnum("sync_status").default("idle").notNull(),
+  syncedPages: integer("synced_pages").default(0).notNull(),
+  totalPages: integer("total_pages"),
+  syncStartedAt: timestamp("sync_started_at", { withTimezone: true }),
 });
+
+export const scrobbles = pgTable(
+  "scrobbles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    playedAt: timestamp("played_at", { withTimezone: true }).notNull(),
+    track: text("track").notNull(),
+    artist: text("artist").notNull(),
+    album: text("album"),
+    artistMbid: text("artist_mbid"),
+    albumMbid: text("album_mbid"),
+    imageUrl: text("image_url"),
+    source: scrobbleSourceEnum("source").notNull(),
+  },
+  (table) => ({
+    playedTrackArtistUnique: uniqueIndex("scrobbles_played_track_artist_unique").on(
+      table.playedAt,
+      table.track,
+      table.artist,
+    ),
+    playedAtIdx: index("scrobbles_played_at_idx").on(table.playedAt),
+  }),
+);
 
 export const scrobbleOutbox = pgTable("scrobble_outbox", {
   id: uuid("id").primaryKey().defaultRandom(),

@@ -7,12 +7,39 @@ import { LibrarySettingsSection } from "@/components/settings/LibrarySettingsSec
 import { MatchingSettingsSection } from "@/components/settings/MatchingSettingsSection";
 import { StorageSettingsSection } from "@/components/settings/StorageSettingsSection";
 import { AppearanceSettingsSection } from "@/components/settings/AppearanceSettingsSection";
+import { useSearchParams } from "react-router-dom";
+
+const SETTINGS_TABS = [
+  "plex",
+  "discogs",
+  "lastfm",
+  "playback",
+  "library",
+  "matching",
+  "storage",
+  "appearance",
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+function parseSettingsTab(value: string | null): SettingsTab {
+  if (value && SETTINGS_TABS.includes(value as SettingsTab)) {
+    return value as SettingsTab;
+  }
+  return "plex";
+}
 
 export function SettingsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseSettingsTab(searchParams.get("tab"));
+
   return (
     <div>
       <h1 className="mb-4 text-2xl font-bold">Settings</h1>
-      <Tabs defaultValue="plex">
+      <Tabs
+        value={activeTab}
+        onValueChange={(tab) => setSearchParams({ tab })}
+      >
         <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="plex">Plex</TabsTrigger>
           <TabsTrigger value="discogs">Discogs</TabsTrigger>
