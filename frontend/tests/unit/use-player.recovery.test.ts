@@ -5,7 +5,7 @@ import {
   RECOVERY_POLICY,
 } from "@/lib/recovery-policy";
 import { reducePlaybackMachine, initialPlaybackMachineState } from "@/lib/playback-machine";
-import { isPrematureEndedPlayback } from "@/hooks/use-player";
+import { isPrematureEndedPlayback, resolveEndedPositionMs } from "@/hooks/use-player";
 
 describe("recovery flow (policy + machine)", () => {
   it("retries up to maxRetries then fails", () => {
@@ -49,5 +49,10 @@ describe("recovery flow (policy + machine)", () => {
   it("does not treat near-end or short tracks as premature", () => {
     expect(isPrematureEndedPlayback(177_000, 180_000)).toBe(false);
     expect(isPrematureEndedPlayback(8_000, 12_000)).toBe(false);
+  });
+
+  it("does not treat natural end as premature when Howler resets seek to 0", () => {
+    const positionMs = resolveEndedPositionMs(0, 177_000);
+    expect(isPrematureEndedPlayback(positionMs, 180_000)).toBe(false);
   });
 });

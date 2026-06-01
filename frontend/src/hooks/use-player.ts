@@ -83,6 +83,11 @@ export function isPrematureEndedPlayback(positionMs: number, knownDurationMs: nu
   );
 }
 
+/** Howler resets seek to 0 on end; use the last reported progress for end checks. */
+export function resolveEndedPositionMs(positionMs: number, lastProgressMs: number): number {
+  return Math.max(positionMs, lastProgressMs);
+}
+
 function disposeStaged(slot: StagedPlayback | null) {
   if (!slot) return;
   slot.engine.destroy();
@@ -313,7 +318,10 @@ export function usePlayerState() {
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
-        const positionMs = engine.getPositionMs();
+        const positionMs = resolveEndedPositionMs(
+          engine.getPositionMs(),
+          engine.getLastProgressMs(),
+        );
         const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
         const endedEarly = isPrematureEndedPlayback(positionMs, knownDurationMs);
 

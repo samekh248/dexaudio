@@ -20,6 +20,8 @@ export interface AudioEngine {
   stop(): void;
   seek(ms: number): void;
   getPositionMs(): number;
+  /** Last position reported while playing; Howler often resets seek to 0 on end. */
+  getLastProgressMs(): number;
   getDurationMs(): number;
   setVolume(v: number): void;
   fadeVolume(from: number, to: number, ms: number): void;
@@ -137,6 +139,10 @@ export function createHowlerAudioEngine(): AudioEngine {
     getPositionMs() {
       if (!howl) return 0;
       return Math.round((howl.seek() as number) * 1000);
+    },
+
+    getLastProgressMs() {
+      return lastProgressMs;
     },
 
     getDurationMs() {

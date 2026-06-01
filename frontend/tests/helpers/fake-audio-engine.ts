@@ -6,6 +6,7 @@ export class FakeAudioEngine implements AudioEngine {
   private events: AudioEngineEvents | null = null;
   private _state: "unloaded" | "loading" | "loaded" = "unloaded";
   private _positionMs = 0;
+  private _lastProgressMs = 0;
   private _durationMs = 0;
   private _volume = 1;
   private _playing = false;
@@ -61,11 +62,16 @@ export class FakeAudioEngine implements AudioEngine {
 
   seek(ms: number): void {
     this._positionMs = ms;
+    this._lastProgressMs = ms;
     this.events?.onProgress(ms);
   }
 
   getPositionMs(): number {
     return this._positionMs;
+  }
+
+  getLastProgressMs(): number {
+    return this._lastProgressMs;
   }
 
   getDurationMs(): number {
