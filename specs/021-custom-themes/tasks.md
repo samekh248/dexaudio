@@ -17,8 +17,8 @@
 
 **Purpose**: Confirm environment and review existing Appearance/theming code.
 
-- [ ] T001 Confirm feature branch `021-custom-themes` and review design docs in `specs/021-custom-themes/`
-- [ ] T002 Audit current theming implementation in `frontend/src/components/settings/AppearanceSettingsSection.tsx`, `frontend/src/components/settings/CustomThemeEditor.tsx`, `frontend/src/lib/custom-theme-presets.ts`, `frontend/src/hooks/use-theme-sync.ts`, and `frontend/src/styles/themes.css`
+- [X] T001 Confirm feature branch `021-custom-themes` and review design docs in `specs/021-custom-themes/`
+- [X] T002 Audit current theming implementation in `frontend/src/components/settings/AppearanceSettingsSection.tsx`, `frontend/src/components/settings/CustomThemeEditor.tsx`, `frontend/src/lib/custom-theme-presets.ts`, `frontend/src/hooks/use-theme-sync.ts`, and `frontend/src/styles/themes.css`
 
 ---
 
@@ -28,15 +28,15 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Add `CustomSelection`, `CuratedThemeId`, `AdvancedTheme` types; `StorageKeys.customSelection`, `StorageKeys.themeMigrationV1`; `MAX_ADVANCED_THEMES = 6` in `frontend/src/lib/local-storage.ts`
-- [ ] T004 [P] Define Warm Tones, Retrowave, and Elegant palette maps (six HSL slots each) with display names/descriptions in `frontend/src/lib/curated-themes.ts`
-- [ ] T005 [P] Implement supplementary-rules sanitizer (16 KB limit, blocklist, allowed selectors) in `frontend/src/lib/theme-supplementary.ts` per `contracts/theme-supplementary-rules.md`
-- [ ] T006 Implement `applyCurated`, `applyAdvanced`, full CSS variable mapping (`--background` through `--now-playing-highlight`), and supplement inject/remove in `frontend/src/lib/theme-engine.ts`
-- [ ] T007 Create Zustand `theme-store.ts` with bootstrap, `applyMode`, `applyCurated`, `applyAdvanced`, persistence to `localStorage`, and dirty-draft state in `frontend/src/lib/theme-store.ts`
-- [ ] T008 Implement legacy preset → nearest curated migration and one-time notice flag in `frontend/src/lib/theme-migration.ts` per `contracts/legacy-migration.md`
-- [ ] T009 Invoke `runThemeMigration()` before React render in `frontend/src/main.tsx`
-- [ ] T010 Refactor `useThemeSync` to delegate custom-mode application to `theme-store` bootstrap while preserving sync/light/dark OS listener behavior in `frontend/src/hooks/use-theme-sync.ts`
-- [ ] T011 [P] Add `[data-theme="custom"]` baseline and document `--now-playing-highlight` usage in `frontend/src/styles/themes.css` (and wire consumers if any component uses hard-coded highlight colors)
+- [X] T003 Add `CustomSelection`, `CuratedThemeId`, `AdvancedTheme` types; `StorageKeys.customSelection`, `StorageKeys.themeMigrationV1`; `MAX_ADVANCED_THEMES = 6` in `frontend/src/lib/local-storage.ts`
+- [X] T004 [P] Define Warm Tones, Retrowave, and Elegant palette maps (six HSL slots each) with display names/descriptions in `frontend/src/lib/curated-themes.ts`
+- [X] T005 [P] Implement supplementary-rules sanitizer (16 KB limit, blocklist, allowed selectors) in `frontend/src/lib/theme-supplementary.ts` per `contracts/theme-supplementary-rules.md`
+- [X] T006 Implement `applyCurated`, `applyAdvanced`, full CSS variable mapping (`--background` through `--now-playing-highlight`), and supplement inject/remove in `frontend/src/lib/theme-engine.ts`
+- [X] T007 Create Zustand `theme-store.ts` with bootstrap, `applyMode`, `applyCurated`, `applyAdvanced`, persistence to `localStorage`, and dirty-draft state in `frontend/src/lib/theme-store.ts`
+- [X] T008 Implement legacy preset → nearest curated migration and one-time notice flag in `frontend/src/lib/theme-migration.ts` per `contracts/legacy-migration.md`
+- [X] T009 Invoke `runThemeMigration()` before React render in `frontend/src/main.tsx`
+- [X] T010 Refactor `useThemeSync` to delegate custom-mode application to `theme-store` bootstrap while preserving sync/light/dark OS listener behavior in `frontend/src/hooks/use-theme-sync.ts`
+- [X] T011 [P] Add `[data-theme="custom"]` baseline and document `--now-playing-highlight` usage in `frontend/src/styles/themes.css` (and wire consumers if any component uses hard-coded highlight colors)
 
 **Checkpoint**: Foundation ready — curated/advanced themes can be applied programmatically; migration runs on boot; store is source of truth.
 
@@ -50,10 +50,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Create `CuratedThemePicker` (three options with name + short description, selection highlight) in `frontend/src/components/settings/CuratedThemePicker.tsx`
-- [ ] T013 [US1] Wire Custom mode in `AppearanceSettingsSection.tsx` to `theme-store` (mode buttons + render `CuratedThemePicker`; selecting curated calls `applyCurated` and persists `customSelection`)
-- [ ] T014 [US1] Seed default `customSelection` to `warm-tones` when entering Custom mode with no prior selection in `frontend/src/lib/theme-store.ts`
-- [ ] T015 [US1] Remove ad-hoc `document.documentElement.setAttribute` / inline preset logic superseded by the store from `frontend/src/components/settings/AppearanceSettingsSection.tsx`
+- [X] T012 [P] [US1] Create `CuratedThemePicker` (three options with name + short description, selection highlight) in `frontend/src/components/settings/CuratedThemePicker.tsx`
+- [X] T013 [US1] Wire Custom mode in `AppearanceSettingsSection.tsx` to `theme-store` (mode buttons + render `CuratedThemePicker`; selecting curated calls `applyCurated` and persists `customSelection`)
+- [X] T014 [US1] Seed default `customSelection` to `warm-tones` when entering Custom mode with no prior selection in `frontend/src/lib/theme-store.ts`
+- [X] T015 [US1] Remove ad-hoc `document.documentElement.setAttribute` / inline preset logic superseded by the store from `frontend/src/components/settings/AppearanceSettingsSection.tsx`
 
 **Checkpoint**: User Story 1 functional — three curated themes selectable, applied app-wide, persisted across restart.
 
@@ -67,11 +67,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T016 [P] [US2] Add HSL parse/validate/format helpers and hex↔HSL conversion utilities in `frontend/src/lib/theme-colors.ts`
-- [ ] T017 [US2] Refactor `CustomThemeEditor.tsx` into advanced editor: six labeled slots (native color input + `Input`), single supplementary `Textarea`, Reset/Save, inline validation errors
-- [ ] T018 [US2] Wire editor draft to `theme-store` for live preview via `theme-engine.applyAdvanced` on valid changes in `frontend/src/components/settings/CustomThemeEditor.tsx`
-- [ ] T019 [US2] Show advanced editor when `customSelection.kind === "advanced"` or user chooses create-your-own; ensure at least one default advanced theme exists on first Custom entry in `frontend/src/lib/theme-store.ts`
-- [ ] T020 [US2] Extend `applyCustomPreset` usages to delegate to `theme-engine` (deprecate or thin-wrap `frontend/src/lib/custom-theme-presets.ts`)
+- [X] T016 [P] [US2] Add HSL parse/validate/format helpers and hex↔HSL conversion utilities in `frontend/src/lib/theme-colors.ts`
+- [X] T017 [US2] Refactor `CustomThemeEditor.tsx` into advanced editor: six labeled slots (native color input + `Input`), single supplementary `Textarea`, Reset/Save, inline validation errors
+- [X] T018 [US2] Wire editor draft to `theme-store` for live preview via `theme-engine.applyAdvanced` on valid changes in `frontend/src/components/settings/CustomThemeEditor.tsx`
+- [X] T019 [US2] Show advanced editor when `customSelection.kind === "advanced"` or user chooses create-your-own; ensure at least one default advanced theme exists on first Custom entry in `frontend/src/lib/theme-store.ts`
+- [X] T020 [US2] Extend `applyCustomPreset` usages to delegate to `theme-engine` (deprecate or thin-wrap `frontend/src/lib/custom-theme-presets.ts`)
 
 **Checkpoint**: User Story 2 functional — advanced themes editable with live preview and persistence independent of curated picks.
 
@@ -85,9 +85,9 @@
 
 ### Implementation for User Story 3
 
-- [ ] T021 [P] [US3] Implement `ThemePackageV1Schema` (Zod), export blob download, and import parse/validate in `frontend/src/lib/theme-package.ts` per `contracts/theme-package-v1.md`
-- [ ] T022 [US3] Add Export button (advanced themes only; disabled/hint when curated active) in `frontend/src/components/settings/CustomThemeEditor.tsx` or shared theme actions toolbar
-- [ ] T023 [US3] Add Import file control with rename/replace/cancel collision dialog and cap-aware net-new blocking in `frontend/src/components/settings/CustomThemeEditor.tsx` (or `AppearanceSettingsSection.tsx`)
+- [X] T021 [P] [US3] Implement `ThemePackageV1Schema` (Zod), export blob download, and import parse/validate in `frontend/src/lib/theme-package.ts` per `contracts/theme-package-v1.md`
+- [X] T022 [US3] Add Export button (advanced themes only; disabled/hint when curated active) in `frontend/src/components/settings/CustomThemeEditor.tsx` or shared theme actions toolbar
+- [X] T023 [US3] Add Import file control with rename/replace/cancel collision dialog and cap-aware net-new blocking in `frontend/src/components/settings/CustomThemeEditor.tsx` (or `AppearanceSettingsSection.tsx`)
 
 **Checkpoint**: User Story 3 functional — round-trip package import/export for advanced themes.
 
@@ -101,11 +101,11 @@
 
 ### Implementation for User Story 4
 
-- [ ] T024 [US4] Add advanced theme list UI (select active, rename inline/modal) in `frontend/src/components/settings/CustomThemeEditor.tsx` or new `AdvancedThemeList.tsx`
-- [ ] T025 [US4] Implement duplicate advanced theme (`Copy of …`) with cap check in `frontend/src/lib/theme-store.ts`
-- [ ] T026 [US4] Implement duplicate curated → new advanced pre-filled palette (`Warm Tones (custom)` naming) with cap check in `frontend/src/lib/theme-store.ts` and UI action on `CuratedThemePicker.tsx`
-- [ ] T027 [US4] Enforce max-six on create/duplicate/net-new import; allow import-replace when at cap in `frontend/src/lib/theme-store.ts`
-- [ ] T028 [US4] Block delete of last advanced theme (or auto-seed replacement) and keep three curated entries always visible in `frontend/src/lib/theme-store.ts` and list UI
+- [X] T024 [US4] Add advanced theme list UI (select active, rename inline/modal) in `frontend/src/components/settings/CustomThemeEditor.tsx` or new `AdvancedThemeList.tsx`
+- [X] T025 [US4] Implement duplicate advanced theme (`Copy of …`) with cap check in `frontend/src/lib/theme-store.ts`
+- [X] T026 [US4] Implement duplicate curated → new advanced pre-filled palette (`Warm Tones (custom)` naming) with cap check in `frontend/src/lib/theme-store.ts` and UI action on `CuratedThemePicker.tsx`
+- [X] T027 [US4] Enforce max-six on create/duplicate/net-new import; allow import-replace when at cap in `frontend/src/lib/theme-store.ts`
+- [X] T028 [US4] Block delete of last advanced theme (or auto-seed replacement) and keep three curated entries always visible in `frontend/src/lib/theme-store.ts` and list UI
 
 **Checkpoint**: All four user stories independently functional — full Custom mode management per spec.
 
@@ -115,10 +115,10 @@
 
 **Purpose**: Migration UX, regression checks, optional unit tests, manual validation.
 
-- [ ] T029 Show one-time Sonner toast after legacy migration with mapped curated name and duplicate hint in `frontend/src/lib/theme-migration.ts`
-- [ ] T030 [P] Add unsaved-changes guard when leaving Custom editor or switching theme mode (save/discard/cancel) in `frontend/src/components/settings/AppearanceSettingsSection.tsx`
-- [ ] T031 [P] Optional unit tests: `frontend/tests/unit/theme-engine.test.ts`, `theme-package.test.ts`, `theme-migration.test.ts`, `theme-supplementary.test.ts`
-- [ ] T032 Run full manual validation walkthrough in `specs/021-custom-themes/quickstart.md` (include Sync/Light/Dark regression and playback-during-import checks)
+- [X] T029 Show one-time Sonner toast after legacy migration with mapped curated name and duplicate hint in `frontend/src/lib/theme-migration.ts`
+- [X] T030 [P] Add unsaved-changes guard when leaving Custom editor or switching theme mode (save/discard/cancel) in `frontend/src/components/settings/AppearanceSettingsSection.tsx`
+- [X] T031 [P] Optional unit tests: `frontend/tests/unit/theme-engine.test.ts`, `theme-package.test.ts`, `theme-migration.test.ts`, `theme-supplementary.test.ts`
+- [X] T032 Run full manual validation walkthrough in `specs/021-custom-themes/quickstart.md` (include Sync/Light/Dark regression and playback-during-import checks)
 
 ---
 

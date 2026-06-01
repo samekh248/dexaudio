@@ -20,6 +20,11 @@
   --radius: 0.5rem;
 }
 
+[data-theme="custom"] {
+  /* Semantic slots are set inline via theme-engine when Custom mode is active */
+  --now-playing-highlight: 210 40% 98%;
+}
+
 [data-theme="dark"] {
   --background: 222 47% 6%;
   --foreground: 210 40% 98%;

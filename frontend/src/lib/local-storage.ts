@@ -1,8 +1,12 @@
 const PREFIX = "dexaudio.";
 
+export const MAX_ADVANCED_THEMES = 6;
+
 export const StorageKeys = {
   themeMode: `${PREFIX}theme.mode`,
   customPresetId: `${PREFIX}theme.customPresetId`,
+  customSelection: `${PREFIX}theme.customSelection`,
+  themeMigrationV1: `${PREFIX}theme.migrationV1`,
   autoQueueSimilar: `${PREFIX}playback.autoQueueSimilar`,
   crossfade: `${PREFIX}playback.crossfade`,
   /** Client prefs: specs/005-gapless-playback/contracts/playback-preferences.yaml */
@@ -66,17 +70,43 @@ export function isGaplessPlaybackEnabled(): boolean {
   return getItem<GaplessPlaybackPreference>(StorageKeys.gaplessPlayback, { enabled: true }).enabled;
 }
 
+export type CuratedThemeId = "warm-tones" | "retrowave" | "elegant";
+
+export type ThemeColorSlots = {
+  background: string;
+  surface: string;
+  primaryText: string;
+  secondaryText: string;
+  accent: string;
+  nowPlayingHighlight: string;
+};
+
+export type CustomSelection =
+  | { kind: "curated"; id: CuratedThemeId }
+  | { kind: "advanced"; id: string };
+
+export interface AdvancedTheme {
+  id: string;
+  name: string;
+  colors: ThemeColorSlots;
+  supplementaryRules?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** @deprecated Use AdvancedTheme — kept for legacy migration input */
 export interface CustomThemePreset {
   id: string;
   name: string;
-  colors: {
-    background: string;
-    surface: string;
-    primaryText: string;
-    secondaryText: string;
-    accent: string;
-    nowPlayingHighlight: string;
-  };
+  colors: ThemeColorSlots;
+}
+
+export function getCustomSelection(): CustomSelection | null {
+  return getItem<CustomSelection | null>(StorageKeys.customSelection, null);
+}
+
+export function getAdvancedThemes(): AdvancedTheme[] {
+  return getItem<AdvancedTheme[]>(StorageKeys.customPresets, []);
 }
 
 export function getThemeMode(): ThemeMode {
