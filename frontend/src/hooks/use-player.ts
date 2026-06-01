@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Howler } from "howler";
 
-import type { PlaybackFailure, Track } from "@dexaudio/shared-types";
+import type { AudioQuality, PlaybackFailure, Track } from "@dexaudio/shared-types";
 
 import { getItem, setItem, StorageKeys } from "@/lib/local-storage.js";
 
@@ -35,6 +35,8 @@ import {
 import {
   blobUrlForTrack,
   howlerFormatsForTrack,
+  qualityFromCachedBlob,
+  shouldAttemptLossless,
   streamUrlForTrack,
 } from "@/lib/stream-audio.js";
 
@@ -64,12 +66,24 @@ type StagedPlayback = {
   src: string;
   fromCache: boolean;
   useLiveOnCacheError: boolean;
+  attemptLossless: boolean;
+  playbackQuality: AudioQuality;
 };
 
 export type LoadTrackOptions = {
   autoplayOnLoad?: boolean;
   initialSeekMs?: number;
   skipCache?: boolean;
+  /** Force transcoded delivery (lossless downgrade path). */
+  forceTranscoded?: boolean;
+};
+
+type ResolvedTrackSrc = {
+  src: string;
+  fromCache: boolean;
+  useLiveOnCacheError: boolean;
+  attemptLossless: boolean;
+  playbackQuality: AudioQuality;
 };
 
 const PREMATURE_END_MIN_DURATION_MS = 15_000;
@@ -111,6 +125,8 @@ export function usePlayerState() {
   const pendingSeekMsRef = useRef<number | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
   const useLiveFallbackRef = useRef(false);
+  const losslessFallbackRef = useRef(false);
+  const attemptedLosslessRef = useRef(false);
   const wallClockRef = useRef<number>(Date.now());
 
   const [playing, setPlaying] = useState(false);
@@ -118,6 +134,7 @@ export function usePlayerState() {
   const [duration, setDuration] = useState(0);
   const [volume, setVolumeState] = useState(() => getItem(StorageKeys.volume, 1));
   const [fromCache, setFromCache] = useState(false);
+  const [playbackQuality, setPlaybackQuality] = useState<AudioQuality | null>(null);
   const [status, setStatus] = useState<PlaybackStatus>("idle");
   const [error, setError] = useState<PlaybackFailure | null>(null);
   const [autoplayBlocked, setAutoplayBlocked] = useState(false);
@@ -213,18 +230,35 @@ export function usePlayerState() {
     async (
       track: Track,
       loadId: number,
-      options: { skipCache?: boolean } = {},
-    ): Promise<{ src: string; fromCache: boolean; useLiveOnCacheError: boolean } | null> => {
+      options: { skipCache?: boolean; forceTranscoded?: boolean } = {},
+    ): Promise<ResolvedTrackSrc | null> => {
+      const attemptLossless = shouldAttemptLossless(track, options.forceTranscoded);
       try {
         if (!options.skipCache) {
           const cached = await readFromCache(track.id);
           if (loadIdRef.current !== loadId) return null;
           if (cached && cached.size > 2048) {
-            return { src: blobUrlForTrack(track, cached), fromCache: true, useLiveOnCacheError: true };
+            const cachedQuality = qualityFromCachedBlob(track, cached);
+            const shouldBypassCachedTranscoded = attemptLossless && cachedQuality === "transcoded";
+            if (!shouldBypassCachedTranscoded) {
+              return {
+                src: blobUrlForTrack(track, cached),
+                fromCache: true,
+                useLiveOnCacheError: true,
+                attemptLossless,
+                playbackQuality: cachedQuality,
+              };
+            }
           }
         }
         if (loadIdRef.current !== loadId) return null;
-        return { src: streamUrlForTrack(track.id), fromCache: false, useLiveOnCacheError: false };
+        return {
+          src: streamUrlForTrack(track.id, { lossless: attemptLossless }),
+          fromCache: false,
+          useLiveOnCacheError: false,
+          attemptLossless,
+          playbackQuality: attemptLossless ? "lossless" : "transcoded",
+        };
       } catch (err) {
         if (loadIdRef.current !== loadId) return null;
         throw err;
@@ -237,12 +271,19 @@ export function usePlayerState() {
     async (
       track: Track,
       stagedGen: number,
-    ): Promise<{ src: string; fromCache: boolean; useLiveOnCacheError: boolean } | null> => {
+    ): Promise<ResolvedTrackSrc | null> => {
       try {
         const cached = await readFromCache(track.id);
         if (stagedGenRef.current !== stagedGen) return null;
         if (cached && cached.size > 2048) {
-          return { src: blobUrlForTrack(track, cached), fromCache: true, useLiveOnCacheError: true };
+          const cachedQuality = qualityFromCachedBlob(track, cached);
+          return {
+            src: blobUrlForTrack(track, cached),
+            fromCache: true,
+            useLiveOnCacheError: true,
+            attemptLossless: cachedQuality === "lossless",
+            playbackQuality: cachedQuality,
+          };
         }
         if (stagedGenRef.current !== stagedGen) return null;
         // Staged preloading must not open a second live Plex stream while the
@@ -264,10 +305,30 @@ export function usePlayerState() {
       recoveryTimerRef.current = setTimeout(() => {
         if (loadIdRef.current !== loadId) return;
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "RETRY", nowMs: Date.now() }));
-        void loadTrackRef.current(track, onEnd, { skipCache: useLiveFallbackRef.current });
+        void loadTrackRef.current(track, onEnd, {
+          skipCache: useLiveFallbackRef.current,
+          forceTranscoded: losslessFallbackRef.current,
+        });
       }, delay);
     },
     [applyMachine, clearRecoveryTimer],
+  );
+
+  const downgradeToTranscoded = useCallback(
+    (track: Track, onEnd: (() => void) | undefined, positionMs: number, loadId: number) => {
+      if (loadIdRef.current !== loadId) return;
+      losslessFallbackRef.current = true;
+      attemptedLosslessRef.current = false;
+      setPlaybackQuality("transcoded");
+      clearRecoveryTimer();
+      void loadTrackRef.current(track, onEnd, {
+        skipCache: useLiveFallbackRef.current,
+        forceTranscoded: true,
+        initialSeekMs: positionMs,
+        autoplayOnLoad: true,
+      });
+    },
+    [clearRecoveryTimer],
   );
 
   const handleTerminalFailure = useCallback(
@@ -292,6 +353,7 @@ export function usePlayerState() {
       src: string,
       loadId: number,
       useLiveOnCacheError: boolean,
+      attemptLossless: boolean,
       onEnd: (() => void) | undefined,
       autoplayOnLoad: boolean,
       engine: AudioEngine,
@@ -349,7 +411,18 @@ export function usePlayerState() {
         }
         if (useLiveOnCacheError && src.startsWith("blob:") && !useLiveFallbackRef.current) {
           useLiveFallbackRef.current = true;
-          void loadTrackRef.current(track, onEnd, { skipCache: true });
+          if (attemptLossless) {
+            losslessFallbackRef.current = true;
+          }
+          void loadTrackRef.current(track, onEnd, {
+            skipCache: true,
+            forceTranscoded: attemptLossless,
+          });
+          return;
+        }
+        if (attemptLossless && !losslessFallbackRef.current) {
+          const positionMs = Math.max(engine.getPositionMs(), engine.getLastProgressMs());
+          downgradeToTranscoded(track, onEnd, positionMs, loadId);
           return;
         }
         const failure = classifyPlaybackError("howler", err, track);
@@ -381,6 +454,10 @@ export function usePlayerState() {
           machineRef.current.status === "buffering" &&
           stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
         ) {
+          if (attemptLossless && !losslessFallbackRef.current) {
+            downgradeToTranscoded(track, onEnd, ms, loadId);
+            return;
+          }
           const stallFailure = classifyStallError(track);
           const attempt = machineRef.current.recovery.attempt;
           if (retriesRemaining(attempt)) {
@@ -392,7 +469,7 @@ export function usePlayerState() {
         }
       },
     }),
-    [clearError, applyMachine, scheduleRecovery, handleTerminalFailure, notifyRecentlyPlayedOnPlay],
+    [clearError, applyMachine, scheduleRecovery, handleTerminalFailure, notifyRecentlyPlayedOnPlay, downgradeToTranscoded],
   );
 
   const bindEngine = useCallback(
@@ -401,15 +478,26 @@ export function usePlayerState() {
       src: string,
       loadId: number,
       useLiveOnCacheError: boolean,
+      attemptLossless: boolean,
       onEnd: (() => void) | undefined,
       autoplayOnLoad: boolean,
       engine: AudioEngine,
     ) => {
+      attemptedLosslessRef.current = attemptLossless;
       engine.setVolume(volume);
       engine.load(
         src,
-        howlerFormatsForTrack(track.format),
-        makeEngineEvents(track, src, loadId, useLiveOnCacheError, onEnd, autoplayOnLoad, engine),
+        howlerFormatsForTrack(track.format, { lossless: attemptLossless }),
+        makeEngineEvents(
+          track,
+          src,
+          loadId,
+          useLiveOnCacheError,
+          attemptLossless,
+          onEnd,
+          autoplayOnLoad,
+          engine,
+        ),
       );
     },
     [volume, makeEngineEvents],
@@ -428,18 +516,29 @@ export function usePlayerState() {
       // ignored and the promoted engine's handlers are authoritative.
       const loadId = ++loadIdRef.current;
       useLiveFallbackRef.current = false;
+      losslessFallbackRef.current = false;
       onEndRef.current = onEnd;
       void onTrackWillChange(staged.track);
       currentTrackRef.current = staged.track;
       startListening(staged.track);
       clearError();
       setFromCache(staged.fromCache);
+      setPlaybackQuality(staged.playbackQuality);
       setDuration(staged.engine.getDurationMs());
 
       // Replace the lightweight preload stubs with the full lifecycle handlers
       // (stall recovery, guarded terminal advance, progress) bound to this load.
       staged.engine.setEvents(
-        makeEngineEvents(staged.track, staged.src, loadId, staged.useLiveOnCacheError, onEnd, false, staged.engine),
+        makeEngineEvents(
+          staged.track,
+          staged.src,
+          loadId,
+          staged.useLiveOnCacheError,
+          staged.attemptLossless,
+          onEnd,
+          false,
+          staged.engine,
+        ),
       );
 
       // Reset recovery/position so the promoted track starts a fresh lifecycle.
@@ -495,7 +594,7 @@ export function usePlayerState() {
       // in the full lifecycle handlers once this engine becomes active. A failed
       // preload simply never reaches "loaded", so promoteStaged falls back to a
       // normal load.
-      engine.load(resolved.src, howlerFormatsForTrack(track.format), {
+      engine.load(resolved.src, howlerFormatsForTrack(track.format, { lossless: resolved.attemptLossless }), {
         onLoaded: () => {},
         onPlay: () => {},
         onPause: () => {},
@@ -512,6 +611,8 @@ export function usePlayerState() {
         src: resolved.src,
         fromCache: resolved.fromCache,
         useLiveOnCacheError: resolved.useLiveOnCacheError,
+        attemptLossless: resolved.attemptLossless,
+        playbackQuality: resolved.playbackQuality,
       };
       if (direction === "forward") stagedForwardRef.current = staged;
       else stagedBackwardRef.current = staged;
@@ -569,6 +670,9 @@ export function usePlayerState() {
       const autoplayOnLoad = options.autoplayOnLoad ?? true;
       const loadId = ++loadIdRef.current;
       useLiveFallbackRef.current = options.skipCache ?? false;
+      if (!options.forceTranscoded) {
+        losslessFallbackRef.current = false;
+      }
       onEndRef.current = onEnd;
       cancelStagedPreloads();
       clearRecoveryTimer();
@@ -579,9 +683,12 @@ export function usePlayerState() {
       startListening(track);
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOAD" }));
 
-      let resolved: Awaited<ReturnType<typeof resolveTrackSrc>>;
+      let resolved: ResolvedTrackSrc | null;
       try {
-        resolved = await resolveTrackSrc(track, loadId, { skipCache: options.skipCache });
+        resolved = await resolveTrackSrc(track, loadId, {
+          skipCache: options.skipCache,
+          forceTranscoded: options.forceTranscoded,
+        });
       } catch (err) {
         if (loadIdRef.current !== loadId) return;
         const failure =
@@ -595,11 +702,13 @@ export function usePlayerState() {
       if (loadIdRef.current !== loadId || !resolved) return;
 
       setFromCache(resolved.fromCache);
+      setPlaybackQuality(resolved.playbackQuality);
       bindEngine(
         track,
         resolved.src,
         loadId,
         resolved.useLiveOnCacheError,
+        resolved.attemptLossless,
         onEnd,
         autoplayOnLoad,
         engineRef.current,
@@ -791,6 +900,7 @@ export function usePlayerState() {
     duration,
     volume,
     fromCache,
+    playbackQuality,
     loading,
     status,
     error,

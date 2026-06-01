@@ -5,14 +5,18 @@ import {
   fetchLibraries,
   fetchSimilarTracks,
   fetchTrackMetadata,
+  getDirectStreamUrl,
+  getPartStreamUrl,
   getStreamUrl,
   getTranscodeUrl,
+  parsePartKeyFromTrackXml,
   isBrowserNativeFormat,
   parseAlbumFromMetadata,
   parseAlbumPageXml,
   parseLibrariesXml,
   parseTrackFromMetadata,
   parseTrackMetadataXml,
+  parseTracksFromContainerXml,
   plexMediaHeaders,
   proxyArtUrl,
   resolveTrackArtPath,
@@ -76,6 +80,20 @@ describe("plex-parser", () => {
     expect(isBrowserNativeFormat("alac")).toBe(false);
   });
 
+  it("parses Part key for direct media streaming", () => {
+    const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="240000"><Media audioCodec="flac"><Part key="/library/parts/99/123/file.flac" container="flac"/></Media></Track></MediaContainer>`;
+    expect(parsePartKeyFromTrackXml(xml)).toBe("/library/parts/99/123/file.flac");
+    const config = { serverUrl: "http://plex.local/", token: "tok" };
+    expect(getPartStreamUrl(config, "/library/parts/99/123/file.flac")).toContain(
+      "/library/parts/99/123/file.flac",
+    );
+    expect(getPartStreamUrl(config, "/library/parts/99/123/file.flac")).toContain("X-Plex-Token=tok");
+    expect(getDirectStreamUrl(config, "1", "/library/parts/99/123/file.flac")).toContain(
+      "/library/parts/99/123/file.flac",
+    );
+    expect(getDirectStreamUrl(config, "1")).toContain("/library/metadata/1/file");
+  });
+
   it("builds transcode and proxy URLs", () => {
     const config = { serverUrl: "http://plex.local/", token: "tok" };
     expect(getStreamUrl(config, "42")).toContain("/library/metadata/42/file");
@@ -132,6 +150,18 @@ describe("plex-parser", () => {
     const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="1000"><Media codec="flac"/></Track></MediaContainer>`;
     const track = parseTrackMetadataXml(xml);
     expect(track?.format).toBe("flac");
+  });
+
+  it("reads audioCodec from nested Media element (Plex native attribute)", () => {
+    const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="240000"><Media audioCodec="flac" container="flac"><Part container="flac"/></Media></Track></MediaContainer>`;
+    expect(parseTrackMetadataXml(xml)?.format).toBe("flac");
+    const tracks = parseTracksFromContainerXml(xml);
+    expect(tracks[0]?.format).toBe("flac");
+  });
+
+  it("reads container from Part when Media codec attrs are absent", () => {
+    const xml = `<MediaContainer><Track ratingKey="1" title="Song" duration="1000"><Media><Part container="flac"/></Media></Track></MediaContainer>`;
+    expect(parseTrackMetadataXml(xml)?.format).toBe("flac");
   });
 
   it("parses track metadata with format", () => {

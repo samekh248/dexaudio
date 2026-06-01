@@ -17,6 +17,7 @@ import {
   type PlayNavigationMode,
 } from "@/lib/local-storage";
 import { usePlaybackPrefs } from "@/lib/playback-prefs-store";
+import { useLosslessPrefs } from "@/lib/lossless-prefs-store";
 import type { TransitionStyle } from "@dexaudio/shared-types";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
@@ -34,6 +35,8 @@ export function PlaybackSettingsSection() {
   const transition = usePlaybackPrefs((s) => s.transition);
   const setTransition = usePlaybackPrefs((s) => s.setTransition);
   const [preCache, setPreCache] = useState(getItem(StorageKeys.preCacheLookAhead, 3));
+  const losslessEnabled = useLosslessPrefs((s) => s.enabled);
+  const setLosslessEnabled = useLosslessPrefs((s) => s.setEnabled);
 
   const trackTransition = transition;
 
@@ -102,6 +105,19 @@ export function PlaybackSettingsSection() {
           {TRACK_TRANSITION_DESCRIPTIONS[trackTransition]}
         </p>
       </div>
+      <label className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <span>Lossless playback</span>
+          <p id="lossless-playback-desc" className="text-sm font-normal text-muted-foreground">
+            Play FLAC and ALAC at original quality when your browser supports it. Falls back to compressed streaming if needed.
+          </p>
+        </div>
+        <Switch
+          checked={losslessEnabled}
+          onCheckedChange={setLosslessEnabled}
+          aria-describedby="lossless-playback-desc"
+        />
+      </label>
       <label className="flex items-center justify-between gap-4">
         <span>Auto-queue similar tracks</span>
         <Switch checked={autoQueue} onCheckedChange={(v) => { setAutoQueue(v); setItem(StorageKeys.autoQueueSimilar, v); }} />

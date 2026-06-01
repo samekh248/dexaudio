@@ -402,19 +402,58 @@ function parseAttrs(attrString: string): Record<string, string> {
   return attrs;
 }
 
+function resolveCodecFromNestedMedia(fragment: string): string | undefined {
+  const mediaMatch = fragment.match(/<Media\b([^>]*?)(?:\/>|>)/i);
+  if (mediaMatch) {
+    const mediaAttrs = parseAttrs(mediaMatch[1]);
+    const codec = mediaAttrs.codec ?? mediaAttrs.audioCodec;
+    if (codec) return codec;
+    if (mediaAttrs.container) return mediaAttrs.container;
+  }
+
+  const partMatch = fragment.match(/<Part\b([^>]*?)(?:\/>|>)/i);
+  if (partMatch) {
+    const partAttrs = parseAttrs(partMatch[1]);
+    return partAttrs.codec ?? partAttrs.container;
+  }
+
+  return undefined;
+}
+
+function enrichTrackAttrsWithCodec(attrs: Record<string, string>, inner?: string): void {
+  if (attrs.codec) return;
+  if (inner) {
+    const nested = resolveCodecFromNestedMedia(inner);
+    if (nested) attrs.codec = nested;
+  }
+}
+
+/**
+ * Parse all <Track> elements from a Plex MediaContainer XML, including the
+ * codec carried on each track's nested <Media> element. Plex lists the codec on
+ * <Media audioCodec="..."> (not always on <Track>), so parsing only the opening
+ * tag yields an "unsupported" format. Handles both self-closing and nested
+ * <Track> elements.
+ */
+export function parseTracksFromContainerXml(xml: string): Track[] {
+  const tracks: Track[] = [];
+  const trackRegex = /<Track\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Track>)/g;
+  let match: RegExpExecArray | null;
+  while ((match = trackRegex.exec(xml)) !== null) {
+    const attrs = parseAttrs(match[1]);
+    enrichTrackAttrsWithCodec(attrs, match[2]);
+    tracks.push(parseTrackFromMetadata(attrs));
+  }
+  return tracks;
+}
+
 export async function fetchAlbumTracks(config: PlexConfig, albumId: string): Promise<Track[]> {
   const base = normalizeUrl(config.serverUrl);
   const url = `${base}/library/metadata/${albumId}/children?X-Plex-Token=${encodeURIComponent(config.token)}`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const xml = await res.text();
-  const tracks: Track[] = [];
-  const trackRegex = /<Track\b([^>]*?)\/?>/g;
-  let match: RegExpExecArray | null;
-  while ((match = trackRegex.exec(xml)) !== null) {
-    tracks.push(parseTrackFromMetadata(parseAttrs(match[1])));
-  }
-  return tracks;
+  return parseTracksFromContainerXml(xml);
 }
 
 export async function fetchSimilarTracks(
@@ -427,18 +466,39 @@ export async function fetchSimilarTracks(
   const res = await fetch(url);
   if (!res.ok) return [];
   const xml = await res.text();
-  const tracks: Track[] = [];
-  const trackRegex = /<Track\b([^>]*?)\/?>/g;
-  let match: RegExpExecArray | null;
-  while ((match = trackRegex.exec(xml)) !== null) {
-    tracks.push(parseTrackFromMetadata(parseAttrs(match[1])));
-  }
-  return tracks;
+  return parseTracksFromContainerXml(xml);
 }
 
+/** Legacy metadata bundle URL — not the on-disk media file. Prefer part key when available. */
 export function getStreamUrl(config: PlexConfig, trackId: string): string {
   const base = normalizeUrl(config.serverUrl);
   return `${base}/library/metadata/${trackId}/file?X-Plex-Token=${encodeURIComponent(config.token)}`;
+}
+
+/** Plex Part `key` from track metadata (e.g. `/library/parts/12345/…/file.flac`). */
+export function parsePartKeyFromTrackXml(xml: string): string | undefined {
+  const partMatch = xml.match(/<Part\b([^>]*?)(?:\/>|>)/i);
+  if (!partMatch) return undefined;
+  const key = parseAttrs(partMatch[1]).key;
+  if (!key?.startsWith("/library/parts/")) return undefined;
+  return key;
+}
+
+/** Direct stream of the original media file via the Part key (lossless / native delivery). */
+export function getPartStreamUrl(config: PlexConfig, partKey: string): string {
+  const base = normalizeUrl(config.serverUrl);
+  const path = partKey.startsWith("/") ? partKey : `/${partKey}`;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${base}${path}${sep}X-Plex-Token=${encodeURIComponent(config.token)}`;
+}
+
+export function getDirectStreamUrl(
+  config: PlexConfig,
+  trackId: string,
+  partKey?: string,
+): string {
+  if (partKey) return getPartStreamUrl(config, partKey);
+  return getStreamUrl(config, trackId);
 }
 
 export function getTranscodeUrl(config: PlexConfig, trackId: string, bitrate = 320): string {
@@ -462,24 +522,46 @@ export function isBrowserNativeFormat(format: TrackFormat): boolean {
   return format === "mp3" || format === "aac" || format === "ogg";
 }
 
+/** Lossless source formats eligible for direct original-file delivery (spec 020). */
+export function isLosslessCandidateFormat(format: TrackFormat): boolean {
+  return format === "flac" || format === "alac";
+}
+
 export function parseTrackMetadataXml(xml: string): Track | null {
-  const trackMatch = xml.match(/<Track\b([^>]*?)\/?>/i);
+  const trackMatch = xml.match(/<Track\b([^>]*?)(?:\/>|>([\s\S]*?)<\/Track>)/i);
   if (!trackMatch) return null;
   const attrs = parseAttrs(trackMatch[1]);
-  const mediaMatch = xml.match(/<Media\b([^>]*?)\/?>/i);
-  if (mediaMatch && !attrs.codec) {
-    const mediaAttrs = parseAttrs(mediaMatch[1]);
-    if (mediaAttrs.codec) attrs.codec = mediaAttrs.codec;
+  enrichTrackAttrsWithCodec(attrs, trackMatch[2]);
+  if (!attrs.codec) {
+    const nested = resolveCodecFromNestedMedia(xml);
+    if (nested) attrs.codec = nested;
   }
   return parseTrackFromMetadata(attrs);
 }
 
-export async function fetchTrackMetadata(config: PlexConfig, trackId: string): Promise<Track | null> {
+export type TrackStreamContext = {
+  track: Track | null;
+  partKey?: string;
+};
+
+export async function fetchTrackStreamContext(
+  config: PlexConfig,
+  trackId: string,
+): Promise<TrackStreamContext> {
   const base = normalizeUrl(config.serverUrl);
   const url = `${base}/library/metadata/${trackId}`;
   const res = await fetch(url, { headers: plexMediaHeaders(config.token) });
-  if (res.status === 401) return null;
-  if (res.status === 404) return null;
+  if (res.status === 401) return { track: null };
+  if (res.status === 404) return { track: null };
   if (!res.ok) throw new ValidationError("Could not reach Plex server", "Check URL and token");
-  return parseTrackMetadataXml(await res.text());
+  const xml = await res.text();
+  return {
+    track: parseTrackMetadataXml(xml),
+    partKey: parsePartKeyFromTrackXml(xml),
+  };
+}
+
+export async function fetchTrackMetadata(config: PlexConfig, trackId: string): Promise<Track | null> {
+  const ctx = await fetchTrackStreamContext(config, trackId);
+  return ctx.track;
 }

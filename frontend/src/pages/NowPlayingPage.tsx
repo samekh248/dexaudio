@@ -167,6 +167,7 @@ export function NowPlayingPage() {
         ) : null}
 
         <AudioPlayer
+          trackFormat={current.format}
           playing={player.playing}
           position={
             player.restorePhase && !player.playing
@@ -176,6 +177,7 @@ export function NowPlayingPage() {
           duration={player.duration || current.durationMs}
           volume={player.volume}
           fromCache={player.fromCache}
+          playbackQuality={player.playbackQuality}
           loading={player.loading}
           status={player.status}
           onPlay={toggle}
