@@ -1,6 +1,9 @@
 import { describe, expect, it, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
 import { AlbumGroupRow } from "@/components/albums/AlbumGroupRow";
+import { LibraryGroupReveal } from "@/components/albums/LibraryGroupReveal";
+import { GroupRevealEntry } from "@/components/albums/GroupRevealEntry";
+import { REVEALED_GROUP_KEYS, clearRevealedGroupKeys } from "@/hooks/use-library-group-reveal";
 
 const scrollProps = new WeakMap<
   HTMLElement,
@@ -33,6 +36,23 @@ function applyOverflowToRegion(region: HTMLElement) {
   });
 }
 
+function mockMatchMedia() {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    configurable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches: false,
+      media: "",
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 function applyFitsOnScreen(region: HTMLElement) {
   scrollProps.set(region, { scrollWidth: 200, clientWidth: 200, scrollLeft: 0 });
   Object.defineProperty(region, "scrollWidth", {
@@ -57,6 +77,7 @@ describe("AlbumGroupRow", () => {
   const originalGetBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
 
   beforeEach(() => {
+    mockMatchMedia();
     HTMLElement.prototype.getBoundingClientRect = function (this: HTMLElement) {
       if (this.getAttribute("role") === "region") {
         return {
@@ -120,7 +141,30 @@ describe("AlbumGroupRow", () => {
     expect(region.className).toMatch(/overflow-x-auto/);
   });
 
-  it("shows right scroll button when content overflows and hides left at start", () => {
+  it("renders group reveal entries inside the scroll container", () => {
+    clearRevealedGroupKeys();
+    REVEALED_GROUP_KEYS.add("lib-1:recently-played");
+
+    render(
+      <LibraryGroupReveal libraryId="lib-1" groupKey="recently-played" entryCount={1}>
+        <AlbumGroupRow
+          title="Clipped"
+          entries={[
+            <GroupRevealEntry key="1" index={0} ready>
+              <span>Inside carousel</span>
+            </GroupRevealEntry>,
+          ]}
+          hideHeading
+        />
+      </LibraryGroupReveal>,
+    );
+
+    const region = screen.getByRole("region", { name: "Clipped carousel" });
+    expect(region.className).toMatch(/overflow-x-auto/);
+    expect(region).toContainElement(screen.getByText("Inside carousel"));
+  });
+
+  it("shows both scroll buttons when content overflows; disables left at start", () => {
     const entries = Array.from({ length: 8 }, (_, i) => (
       <span key={i} data-width="160">
         Item {i}
@@ -131,10 +175,12 @@ describe("AlbumGroupRow", () => {
     applyOverflowToRegion(region);
     fireEvent.scroll(region);
 
-    expect(screen.queryByRole("button", { name: "Scroll left" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Scroll right" })).toBeInTheDocument();
-    expect(screen.getByTestId("carousel-nav-left")).toHaveClass("invisible");
-    expect(screen.getByTestId("carousel-nav-right")).not.toHaveClass("invisible");
+    const left = screen.getByRole("button", { name: "Scroll left" });
+    const right = screen.getByRole("button", { name: "Scroll right" });
+    expect(left).toBeDisabled();
+    expect(left.querySelector("svg")).toBeNull();
+    expect(right).not.toBeDisabled();
+    expect(right.querySelector("svg")).not.toBeNull();
     expect(screen.getByTestId("carousel-right-fade")).toBeInTheDocument();
   });
 
@@ -187,7 +233,7 @@ describe("AlbumGroupRow", () => {
     expect(children[1].scrollIntoView).toHaveBeenCalled();
   });
 
-  it("renders no gutter buttons when all entries fit", () => {
+  it("renders disabled gutter buttons when all entries fit", () => {
     render(
       <AlbumGroupRow
         title="Fits"
@@ -205,10 +251,12 @@ describe("AlbumGroupRow", () => {
     applyFitsOnScreen(region);
     fireEvent.scroll(region);
 
-    expect(screen.queryByRole("button", { name: "Scroll left" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Scroll right" })).not.toBeInTheDocument();
-    expect(screen.queryByTestId("carousel-nav-left")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("carousel-nav-right")).not.toBeInTheDocument();
+    const left = screen.getByRole("button", { name: "Scroll left" });
+    const right = screen.getByRole("button", { name: "Scroll right" });
+    expect(left).toBeDisabled();
+    expect(right).toBeDisabled();
+    expect(left.querySelector("svg")).toBeNull();
+    expect(right.querySelector("svg")).toBeNull();
   });
 
   it("provides keyboard-focusable scroll buttons with aria labels", () => {

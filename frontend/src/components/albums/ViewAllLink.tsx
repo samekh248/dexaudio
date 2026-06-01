@@ -20,9 +20,10 @@ export function ViewAllLink({ groupKey, groupTitle }: ViewAllLinkProps) {
   return (
     <Link
       to={to}
-      className="mt-2 inline-block text-sm font-medium text-primary underline-offset-4 hover:underline"
+      className="shrink-0 text-sm font-medium text-primary underline-offset-4 hover:underline"
+      aria-label={`View all ${groupTitle.toLowerCase()}`}
     >
-      View all {groupTitle.toLowerCase()}
+      (View all)
     </Link>
   );
 }

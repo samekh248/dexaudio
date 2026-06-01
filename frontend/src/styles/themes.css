@@ -207,3 +207,41 @@ body {
     animation-name: album-cover-fade-in;
   }
 }
+
+@keyframes library-group-entry-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes library-group-reveal-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.library-group-entry-slide {
+  opacity: 0;
+  animation: library-group-entry-slide 400ms ease-out forwards;
+  animation-delay: calc(var(--group-entry-index, 0) * 60ms);
+}
+
+.library-group-reveal-fade {
+  animation: library-group-reveal-fade 250ms ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .library-group-entry-slide {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

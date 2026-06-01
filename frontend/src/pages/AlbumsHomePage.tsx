@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Album, ArtistSpotlight } from "@dexaudio/shared-types";
 import { getItem, StorageKeys } from "@/lib/local-storage";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -6,11 +7,45 @@ import { AlbumCard } from "@/components/albums/AlbumCard";
 import { ArtistSpotlightTile } from "@/components/albums/ArtistSpotlightTile";
 import { BrowseAllTile } from "@/components/albums/BrowseAllTile";
 import { LibraryGroupSection } from "@/components/albums/LibraryGroupSection";
+import { GroupRevealEntry } from "@/components/albums/GroupRevealEntry";
 import { useLibraryHomeGroups } from "@/hooks/use-library-home-groups";
+import { clearRevealedGroupKeys } from "@/hooks/use-library-group-reveal";
+
+function AlbumCarouselEntry({ album, index }: { album: Album; index: number }) {
+  const [ready, setReady] = useState(() => !album.artUrl);
+  return (
+    <GroupRevealEntry index={index} ready={ready}>
+      <AlbumCard album={album} onRevealCompleteChange={setReady} />
+    </GroupRevealEntry>
+  );
+}
+
+function SpotlightCarouselEntry({
+  spotlight,
+  index,
+}: {
+  spotlight: ArtistSpotlight;
+  index: number;
+}) {
+  const [ready, setReady] = useState(false);
+  return (
+    <GroupRevealEntry index={index} ready={ready}>
+      <ArtistSpotlightTile spotlight={spotlight} onRevealCompleteChange={setReady} />
+    </GroupRevealEntry>
+  );
+}
 
 export function AlbumsHomePage() {
   const libraryId = getItem(StorageKeys.activeLibraryId, "");
   const groups = useLibraryHomeGroups(libraryId);
+
+  const previousLibraryId = useRef<string | null>(null);
+  useEffect(() => {
+    if (previousLibraryId.current !== null && previousLibraryId.current !== libraryId) {
+      clearRevealedGroupKeys();
+    }
+    previousLibraryId.current = libraryId;
+  }, [libraryId]);
 
   if (!libraryId) {
     return (
@@ -40,13 +75,14 @@ export function AlbumsHomePage() {
       <LibraryGroupSection
         title="Recently Played"
         groupKey="recently-played"
+        libraryId={libraryId}
         query={groups.recentlyPlayed}
       >
         {(items) => (
           <AlbumGroupRow
             title="Recently Played"
-            entries={(items as Album[]).map((a) => (
-              <AlbumCard key={a.id} album={a} />
+            entries={(items as Album[]).map((a, index) => (
+              <AlbumCarouselEntry key={a.id} album={a} index={index} />
             ))}
             hideHeading
           />
@@ -55,24 +91,30 @@ export function AlbumsHomePage() {
       <LibraryGroupSection
         title="Recently Added"
         groupKey="recently-added"
+        libraryId={libraryId}
         query={groups.recentlyAdded}
       >
         {(items) => (
           <AlbumGroupRow
             title="Recently Added"
-            entries={(items as Album[]).map((a) => (
-              <AlbumCard key={a.id} album={a} />
+            entries={(items as Album[]).map((a, index) => (
+              <AlbumCarouselEntry key={a.id} album={a} index={index} />
             ))}
             hideHeading
           />
         )}
       </LibraryGroupSection>
-      <LibraryGroupSection title="Hidden Gems" groupKey="hidden-gems" query={groups.hiddenGems}>
+      <LibraryGroupSection
+        title="Hidden Gems"
+        groupKey="hidden-gems"
+        libraryId={libraryId}
+        query={groups.hiddenGems}
+      >
         {(items) => (
           <AlbumGroupRow
             title="Hidden Gems"
-            entries={(items as Album[]).map((a) => (
-              <AlbumCard key={a.id} album={a} />
+            entries={(items as Album[]).map((a, index) => (
+              <AlbumCarouselEntry key={a.id} album={a} index={index} />
             ))}
             hideHeading
           />
@@ -81,30 +123,35 @@ export function AlbumsHomePage() {
       <LibraryGroupSection
         title="Random Picks"
         groupKey="random-picks"
+        libraryId={libraryId}
         query={groups.randomPicks}
         showViewAll={false}
       >
         {(items) => {
+          const albums = items as Album[];
           const randomEntries = [
-            ...(items as Album[]).map((album) => <AlbumCard key={album.id} album={album} />),
-            <BrowseAllTile key="browse-all" />,
+            ...albums.map((album, index) => (
+              <AlbumCarouselEntry key={album.id} album={album} index={index} />
+            )),
+            <GroupRevealEntry key="browse-all" index={albums.length} ready>
+              <BrowseAllTile />
+            </GroupRevealEntry>,
           ];
-          return (
-            <AlbumGroupRow title="Random Picks" entries={randomEntries} hideHeading />
-          );
+          return <AlbumGroupRow title="Random Picks" entries={randomEntries} hideHeading />;
         }}
       </LibraryGroupSection>
       <LibraryGroupSection
         title="Artist Spotlights"
         groupKey="artist-spotlights"
+        libraryId={libraryId}
         query={groups.artistSpotlights}
         showViewAll={false}
       >
         {(items) => (
           <AlbumGroupRow
             title="Artist Spotlights"
-            entries={(items as ArtistSpotlight[]).map((s) => (
-              <ArtistSpotlightTile key={s.artistId} spotlight={s} />
+            entries={(items as ArtistSpotlight[]).map((s, index) => (
+              <SpotlightCarouselEntry key={s.artistId} spotlight={s} index={index} />
             ))}
             hideHeading
           />

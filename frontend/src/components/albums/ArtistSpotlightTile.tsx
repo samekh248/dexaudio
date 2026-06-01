@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { ArtistSpotlight } from "@dexaudio/shared-types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -5,21 +6,54 @@ import { Button } from "@/components/ui/button";
 import { Play } from "lucide-react";
 import { AlbumCoverImage } from "./AlbumCoverImage";
 import { usePlayArtist } from "@/hooks/use-play-artist";
+import type { CoverLoadPhase } from "@/hooks/use-album-cover-load";
 
 interface ArtistSpotlightTileProps {
   spotlight: ArtistSpotlight;
+  onRevealCompleteChange?: (complete: boolean) => void;
 }
 
-export function ArtistSpotlightTile({ spotlight }: ArtistSpotlightTileProps) {
+function isTerminalCoverPhase(phase: CoverLoadPhase): boolean {
+  return phase === "revealed" || phase === "absent" || phase === "failed";
+}
+
+export function ArtistSpotlightTile({
+  spotlight,
+  onRevealCompleteChange,
+}: ArtistSpotlightTileProps) {
   const playArtist = usePlayArtist();
   const covers = spotlight.albumArtUrls.length
     ? spotlight.albumArtUrls
     : [undefined, undefined, undefined];
+  const visibleCovers = covers.slice(0, 3);
+  const [layerPhases, setLayerPhases] = useState<CoverLoadPhase[]>(() =>
+    visibleCovers.map((url) => (url ? "pending" : "absent")),
+  );
+
+  const revealComplete = useMemo(
+    () =>
+      layerPhases.length === visibleCovers.length &&
+      layerPhases.every(isTerminalCoverPhase),
+    [layerPhases, visibleCovers.length],
+  );
+
+  useEffect(() => {
+    onRevealCompleteChange?.(revealComplete);
+  }, [revealComplete, onRevealCompleteChange]);
+
+  const setLayerPhase = (index: number, phase: CoverLoadPhase) => {
+    setLayerPhases((prev) => {
+      if (prev[index] === phase) return prev;
+      const next = [...prev];
+      next[index] = phase;
+      return next;
+    });
+  };
 
   return (
     <Card className="group relative w-[160px] shrink-0 overflow-hidden">
       <div className="relative mx-auto mt-3 h-28 w-24">
-        {covers.slice(0, 3).map((url, i) => (
+        {visibleCovers.map((url, i) => (
           <div
             key={i}
             className="absolute h-20 w-20 overflow-hidden rounded shadow-md ring-1 ring-border"
@@ -30,7 +64,11 @@ export function ArtistSpotlightTile({ spotlight }: ArtistSpotlightTileProps) {
               zIndex: i + 1,
             }}
           >
-            <AlbumCoverImage artUrl={url} fallbackLabel="—" />
+            <AlbumCoverImage
+              artUrl={url}
+              fallbackLabel="—"
+              onPhaseChange={(phase) => setLayerPhase(i, phase)}
+            />
           </div>
         ))}
         <Button
