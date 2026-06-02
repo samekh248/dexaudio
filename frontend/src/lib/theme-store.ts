@@ -8,12 +8,16 @@ import {
 } from "@/lib/theme-engine";
 import { packageToAdvancedTheme, type ThemePackageV1 } from "@/lib/theme-package";
 import { areThemeColorsValid } from "@/lib/theme-colors";
+import {
+  applyAppearancePreference,
+  persistAppearanceRepairs,
+  reconcileAppearancePreference,
+  type ReconciledAppearance,
+} from "@/lib/theme-hydration";
 import { runThemeMigration } from "@/lib/theme-migration";
 import {
   getAdvancedThemes,
   getCustomSelection,
-  getItem,
-  getThemeMode,
   MAX_ADVANCED_THEMES,
   setItem,
   StorageKeys,
@@ -43,14 +47,12 @@ function defaultCustomSelection(): CustomSelection {
   return { kind: "curated", id: "warm-tones" };
 }
 
-function resolveCustomSelection(
-  selection: CustomSelection | null,
-  themes: AdvancedTheme[],
+function customSelectionForStore(
+  themeMode: ThemeMode,
+  active: CustomSelection | null,
 ): CustomSelection {
-  if (!selection) return defaultCustomSelection();
-  if (selection.kind === "curated") return selection;
-  if (themes.some((t) => t.id === selection.id)) return selection;
-  return themes[0] ? { kind: "advanced", id: themes[0].id } : defaultCustomSelection();
+  if (themeMode === "custom" && active) return active;
+  return getCustomSelection() ?? defaultCustomSelection();
 }
 
 export type ThemeStore = {
@@ -97,6 +99,24 @@ function persistSelection(selection: CustomSelection): void {
   setItem(StorageKeys.customSelection, selection);
 }
 
+/** Align Zustand with DOM after synchronous `hydrateThemeFromStorage()` (before React render). */
+export function initThemeStoreFromHydration(
+  reconciled: ReconciledAppearance,
+  migrationNotice: string | null = null,
+): void {
+  const advancedThemes = readAdvancedThemes();
+  useThemeStore.setState({
+    themeMode: reconciled.themeMode,
+    advancedThemes,
+    customSelection: customSelectionForStore(reconciled.themeMode, reconciled.customSelection),
+    migrationNotice,
+    draft: null,
+    savedDraft: null,
+    dirty: false,
+    editorOpen: false,
+  });
+}
+
 export const useThemeStore = create<ThemeStore>((set, get) => ({
   themeMode: "sync",
   customSelection: defaultCustomSelection(),
@@ -109,27 +129,11 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
 
   bootstrap() {
     const migration = runThemeMigration();
-    const themeMode = getThemeMode();
-    const advancedThemes = readAdvancedThemes();
-    const customSelection = resolveCustomSelection(getCustomSelection(), advancedThemes);
-
-    set({
-      themeMode,
-      advancedThemes,
-      customSelection,
-      migrationNotice: migration.notice,
-      draft: null,
-      savedDraft: null,
-      dirty: false,
-      editorOpen: false,
-    });
-
-    if (themeMode === "custom") {
-      persistSelection(customSelection);
-      applySelection(customSelection, advancedThemes);
-    } else {
-      applyDataTheme(themeMode);
-    }
+    const reconciled = reconcileAppearancePreference();
+    persistAppearanceRepairs(reconciled);
+    const advancedThemes = getAdvancedThemes();
+    applyAppearancePreference(reconciled, advancedThemes);
+    initThemeStoreFromHydration(reconciled, migration.notice);
   },
 
   clearMigrationNotice() {
@@ -387,36 +391,28 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   },
 
   deleteAdvanced(id) {
-    const { advancedThemes } = get();
+    const { advancedThemes, customSelection } = get();
     if (advancedThemes.length <= 1) {
       return "At least one advanced theme must remain.";
     }
     const nextThemes = advancedThemes.filter((t) => t.id !== id);
     persistAdvancedThemes(nextThemes);
 
-    let { customSelection } = get();
-    if (customSelection.kind === "advanced" && customSelection.id === id) {
-      const fallback = nextThemes[0]!;
-      customSelection = { kind: "advanced", id: fallback.id };
-      persistSelection(customSelection);
-      applyAdvancedTheme(fallback);
-      set({
-        advancedThemes: nextThemes,
-        customSelection,
-        draft: null,
-        savedDraft: null,
-        dirty: false,
-        editorOpen: false,
-      });
-    } else {
-      const closingEdited = get().draft?.id === id;
-      set({
-        advancedThemes: nextThemes,
-        ...(closingEdited
-          ? { draft: null, savedDraft: null, dirty: false, editorOpen: false }
-          : {}),
-      });
+    const wasActive =
+      customSelection.kind === "advanced" && customSelection.id === id;
+    const closingEdited = get().draft?.id === id;
+
+    set({
+      advancedThemes: nextThemes,
+      ...(closingEdited || wasActive
+        ? { draft: null, savedDraft: null, dirty: false, editorOpen: false }
+        : {}),
+    });
+
+    if (wasActive) {
+      get().applyMode("sync");
     }
+
     return null;
   },
 
