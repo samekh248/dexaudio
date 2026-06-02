@@ -28,6 +28,17 @@ function formatMs(ms: number) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
+function playbackStatusMessage(
+  loading: boolean | undefined,
+  status: AudioPlayerProps["status"],
+  playing: boolean,
+): string | null {
+  if (status === "recovering") return "Recovering…";
+  if (status === "buffering" && !playing) return "Buffering…";
+  if (loading && !playing) return "Loading…";
+  return null;
+}
+
 export function AudioPlayer({
   playing,
   position,
@@ -45,6 +56,8 @@ export function AudioPlayer({
   onNext,
   onPrevious,
 }: AudioPlayerProps) {
+  const statusMessage = playbackStatusMessage(loading, status, playing);
+
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -71,9 +84,9 @@ export function AudioPlayer({
         <span aria-live="polite">{formatMs(position)}</span>
         <span>{formatMs(duration)}</span>
       </div>
-      {loading || status === "buffering" || status === "recovering" ? (
+      {statusMessage ? (
         <p className="text-xs text-muted-foreground" aria-live="polite">
-          {status === "recovering" ? "Recovering…" : status === "buffering" ? "Buffering…" : "Loading…"}
+          {statusMessage}
         </p>
       ) : null}
       <div className="flex items-center justify-center gap-2">

@@ -151,3 +151,19 @@ export function isTerminalStatus(status: PlaybackStatus): boolean {
 export function isLoadingIndicatorStatus(status: PlaybackStatus): boolean {
   return status === "loading" || status === "buffering" || status === "recovering";
 }
+
+/** Play/pause button: reflect user intent during load/buffer, not only steady "playing". */
+export function isControlsPlayingStatus(
+  status: PlaybackStatus,
+  userWantsPlayback: boolean,
+): boolean {
+  if (userWantsPlayback) {
+    return (
+      status === "loading" ||
+      status === "playing" ||
+      status === "buffering" ||
+      status === "recovering"
+    );
+  }
+  return status === "playing";
+}

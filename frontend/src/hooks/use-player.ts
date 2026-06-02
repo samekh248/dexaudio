@@ -47,6 +47,7 @@ import {
 } from "@/lib/audio-engine.js";
 import {
   initialPlaybackMachineState,
+  isControlsPlayingStatus,
   isLoadingIndicatorStatus,
   isTerminalStatus,
   reducePlaybackMachine,
@@ -132,6 +133,7 @@ export function usePlayerState() {
   const losslessFallbackRef = useRef(false);
   const attemptedLosslessRef = useRef(false);
   const wallClockRef = useRef<number>(Date.now());
+  const userWantsPlaybackRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -174,7 +176,7 @@ export function usePlayerState() {
     setStatus(next.status);
     setPosition(next.positionMs);
     if (next.failure) setError(next.failure);
-    setPlaying(next.status === "playing");
+    setPlaying(isControlsPlayingStatus(next.status, userWantsPlaybackRef.current));
   }, []);
 
   const syncRestoredPosition = useCallback(() => {
@@ -369,10 +371,17 @@ export function usePlayerState() {
         applyMachine(
           reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: autoplayOnLoad }),
         );
-        if (autoplayOnLoad) engine.play();
+        if (autoplayOnLoad) {
+          userWantsPlaybackRef.current = true;
+          engine.play();
+        }
       },
       onPlay: () => {
         if (loadIdRef.current !== loadId) return;
+        if (!userWantsPlaybackRef.current) {
+          engine.pause();
+          return;
+        }
         clearError();
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
         onPlaybackPlay(track, engine.getPositionMs());
@@ -385,6 +394,7 @@ export function usePlayerState() {
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
+        if (!userWantsPlaybackRef.current) return;
         const mediaPositionMs = engine.getMediaPositionMs();
         const positionMs = resolveEndedPositionMs(
           Math.max(engine.getPositionMs(), mediaPositionMs),
@@ -679,6 +689,9 @@ export function usePlayerState() {
   const loadTrack = useCallback(
     async (track: Track, onEnd?: () => void, options: LoadTrackOptions = {}) => {
       const autoplayOnLoad = options.autoplayOnLoad ?? true;
+      if (autoplayOnLoad) {
+        userWantsPlaybackRef.current = true;
+      }
       const loadId = ++loadIdRef.current;
       useLiveFallbackRef.current = options.skipCache ?? false;
       if (!options.forceTranscoded) {
@@ -756,17 +769,21 @@ export function usePlayerState() {
   loadTrackRef.current = loadTrack;
 
   const resumeAutoplay = useCallback(() => {
+    userWantsPlaybackRef.current = true;
     void Howler.ctx?.resume();
     setAutoplayBlocked(false);
     engineRef.current.play();
   }, []);
 
   const play = useCallback(() => {
+    userWantsPlaybackRef.current = true;
     clearError();
     usePlaybackQueue.getState().markPlaybackStarted();
     const track = currentTrackRef.current;
     if (engineRef.current.state() === "loaded") {
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+    } else {
+      setPlaying(isControlsPlayingStatus(machineRef.current.status, true));
     }
     engineRef.current.play();
     if (track) onPlaybackPlay(track, engineRef.current.getPositionMs());
@@ -774,6 +791,7 @@ export function usePlayerState() {
   }, [clearError, applyMachine, notifyRecentlyPlayedOnPlay]);
 
   const pause = useCallback(() => {
+    userWantsPlaybackRef.current = false;
     const track = currentTrackRef.current;
     engineRef.current.pause();
     if (engineRef.current.state() === "loaded") {
@@ -842,8 +860,8 @@ export function usePlayerState() {
     const id = setInterval(() => {
       const engine = engineRef.current;
       if (engine.state() !== "loaded") return;
-      engine.syncEndedIfComplete();
-      if (status === "playing") {
+      if (status === "playing" && userWantsPlaybackRef.current) {
+        engine.syncEndedIfComplete();
         const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
         setPosition(ms);
         updateListenPosition(ms);
@@ -869,7 +887,8 @@ export function usePlayerState() {
         return;
       }
       const elapsed = Date.now() - wallClockRef.current;
-      if (elapsed > 0 && status === "buffering") {
+      const wasBackgrounded = elapsed > 250;
+      if (wasBackgrounded && status === "buffering") {
         const stallStarted = machineRef.current.recovery.stallStartedAt;
         if (stallStarted !== null && stallWindowExceeded(stallStarted, Date.now())) {
           const track = currentTrackRef.current;
@@ -883,7 +902,9 @@ export function usePlayerState() {
       }
       const engine = engineRef.current;
       if (engine.state() === "loaded") {
-        engine.syncEndedIfComplete();
+        if (status === "playing" && userWantsPlaybackRef.current) {
+          engine.syncEndedIfComplete();
+        }
         const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
         if (status === "playing" || status === "paused") {
           setPosition(ms);
@@ -891,7 +912,7 @@ export function usePlayerState() {
         const shouldResume =
           usePlaybackQueue.getState().playbackStarted &&
           !engine.isMediaEnded() &&
-          (autoplayBlocked || (status === "playing" && !engine.isPlaying()));
+          (autoplayBlocked || (wasBackgrounded && status === "playing" && !engine.isPlaying()));
         if (shouldResume) {
           void Howler.ctx?.resume();
           setAutoplayBlocked(false);
@@ -953,5 +974,6 @@ export function usePlayerState() {
     cancelStagedPreloads,
     setTerminalHandler,
     isTerminalStatus,
+    isUserPlaybackActive: () => userWantsPlaybackRef.current,
   };
 }

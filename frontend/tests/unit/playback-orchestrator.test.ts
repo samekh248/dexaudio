@@ -52,6 +52,7 @@ describe("playback orchestrator", () => {
         preloadBackward: vi.fn(),
         tryHandoffForward,
         isFromCache: () => true,
+        isUserPlaybackActive: () => true,
         onWillLoadTrack: vi.fn(),
       },
       onFailed: vi.fn(),
@@ -74,6 +75,7 @@ describe("playback orchestrator", () => {
         preloadBackward: vi.fn(),
         tryHandoffForward,
         isFromCache: () => true,
+        isUserPlaybackActive: () => true,
         onWillLoadTrack: vi.fn(),
       },
       onFailed: vi.fn(),
@@ -97,6 +99,7 @@ describe("playback orchestrator", () => {
         preloadBackward: vi.fn(),
         tryHandoffForward,
         isFromCache: () => true,
+        isUserPlaybackActive: () => true,
         onWillLoadTrack: vi.fn(),
       },
       onFailed: vi.fn(),
@@ -104,6 +107,30 @@ describe("playback orchestrator", () => {
 
     onPlaybackProgressOrchestration("t1", 99_900, 100_000);
     expect(next).toHaveBeenCalledTimes(1);
+
+    unregister();
+  });
+
+  it("does not advance or hand off while the user has paused", () => {
+    const unregister = registerPlaybackOrchestrator({
+      bridge: {
+        getActiveTrackId: () => "t1",
+        loadTrack,
+        seek: vi.fn(),
+        preloadForward: vi.fn(),
+        preloadBackward: vi.fn(),
+        tryHandoffForward,
+        isFromCache: () => true,
+        isUserPlaybackActive: () => false,
+        onWillLoadTrack: vi.fn(),
+      },
+      onFailed: vi.fn(),
+    });
+
+    advancePlaybackQueue("ended");
+    onPlaybackProgressOrchestration("t1", 99_900, 100_000);
+    expect(next).not.toHaveBeenCalled();
+    expect(tryHandoffForward).not.toHaveBeenCalled();
 
     unregister();
   });

@@ -22,6 +22,9 @@ const { mockHowlInstances, HowlMock } = vi.hoisted(() => {
 
     constructor(opts: Record<string, unknown>) {
       this.node = document.createElement("audio");
+      this.node.pause = () => {
+        Object.defineProperty(this.node, "paused", { value: true, configurable: true });
+      };
       this._sounds = [{ _node: this.node }];
       Object.assign(this.handlers, {
         onload: opts.onload,
@@ -146,5 +149,41 @@ describe("audio engine completion in background", () => {
 
     engine.syncEndedIfComplete();
     expect(ended).toBe(true);
+  });
+
+  it("blocks browser auto-resume after another tab steals audio focus", () => {
+    const engine = createHowlerAudioEngine();
+    let playCount = 0;
+    let pauseCount = 0;
+
+    engine.load("https://example.com/track.mp3", ["mp3"], {
+      onLoaded: () => {},
+      onPlay: () => {
+        playCount += 1;
+      },
+      onPause: () => {
+        pauseCount += 1;
+      },
+      onEnded: () => {},
+      onError: () => {},
+      onStall: () => {},
+      onResume: () => {},
+      onProgress: () => {},
+    });
+
+    const howl = mockHowlInstances[0]!;
+    howl._state = "loaded";
+    howl.handlers.onload?.();
+    engine.play();
+    expect(playCount).toBe(1);
+
+    Object.defineProperty(howl.node, "paused", { value: true, configurable: true });
+    howl.node.dispatchEvent(new Event("pause"));
+
+    Object.defineProperty(howl.node, "paused", { value: false, configurable: true });
+    howl.node.dispatchEvent(new Event("play"));
+
+    expect(howl.node.paused).toBe(true);
+    expect(playCount).toBe(1);
   });
 });

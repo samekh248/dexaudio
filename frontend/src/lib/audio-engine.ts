@@ -73,6 +73,15 @@ export function createHowlerAudioEngine(): AudioEngine {
   let mediaListenerTimer: ReturnType<typeof setTimeout> | null = null;
   let wallEndAt = 0;
   let wallEndTimer: ReturnType<typeof setInterval> | null = null;
+  /** Set while our code calls pause(); unset after the media element pauses. */
+  let intentionalPause = false;
+  /** Set while our code calls play(); allows one guarded media "play" event. */
+  let intentionalPlay = false;
+  /**
+   * When another tab takes audio focus (e.g. YouTube), the browser pauses us and may
+   * auto-resume when that media stops — block that until the user presses play again.
+   */
+  let blockUnintendedResume = false;
 
   const clearStallWatch = () => {
     if (stallWatchId !== null) {
@@ -90,11 +99,31 @@ export function createHowlerAudioEngine(): AudioEngine {
     mediaListenerAttempts = 0;
   };
 
+  const onMediaPauseGuard = () => {
+    if (!intentionalPause) {
+      blockUnintendedResume = true;
+    }
+  };
+
+  const onMediaPlayGuard = () => {
+    const node = html5AudioNode(howl);
+    if (blockUnintendedResume && !intentionalPlay) {
+      if (node) {
+        intentionalPause = true;
+        node.pause();
+        intentionalPause = false;
+      }
+      return;
+    }
+  };
+
   const detachMediaListeners = () => {
     clearMediaListenerRetry();
     if (!mediaNode) return;
     mediaNode.removeEventListener("ended", onMediaEnded);
     mediaNode.removeEventListener("timeupdate", onMediaTimeUpdate);
+    mediaNode.removeEventListener("pause", onMediaPauseGuard);
+    mediaNode.removeEventListener("play", onMediaPlayGuard);
     mediaNode = null;
   };
 
@@ -143,7 +172,7 @@ export function createHowlerAudioEngine(): AudioEngine {
       onMediaEnded();
       return;
     }
-    if (node && Number.isFinite(node.duration) && node.duration > 0) {
+    if (node && isNodeActivelyPlaying(node) && Number.isFinite(node.duration) && node.duration > 0) {
       const posMs = Math.round(node.currentTime * 1000);
       if (isNearTrackEnd(howl, posMs)) {
         lastProgressMs = Math.max(lastProgressMs, posMs);
@@ -192,10 +221,14 @@ export function createHowlerAudioEngine(): AudioEngine {
     if (mediaNode) {
       mediaNode.removeEventListener("ended", onMediaEnded);
       mediaNode.removeEventListener("timeupdate", onMediaTimeUpdate);
+      mediaNode.removeEventListener("pause", onMediaPauseGuard);
+      mediaNode.removeEventListener("play", onMediaPlayGuard);
     }
     mediaNode = node;
     node.addEventListener("ended", onMediaEnded);
     node.addEventListener("timeupdate", onMediaTimeUpdate);
+    node.addEventListener("pause", onMediaPauseGuard);
+    node.addEventListener("play", onMediaPlayGuard);
   };
 
   const ensureMediaListeners = () => {
@@ -231,6 +264,8 @@ export function createHowlerAudioEngine(): AudioEngine {
         }
         events?.onProgress(pos);
       } else if (!stalled && howl?.playing()) {
+        // Howler can report playing before the first timeupdate; avoid a false stall.
+        if (lastProgressMs === 0 && pos === 0) return;
         stalled = true;
         events?.onStall();
       }
@@ -243,6 +278,9 @@ export function createHowlerAudioEngine(): AudioEngine {
       events = ev;
       lastProgressMs = 0;
       endNotified = false;
+      blockUnintendedResume = false;
+      intentionalPlay = false;
+      intentionalPause = false;
       if (src.startsWith("blob:")) blobUrl = src;
 
       howl = new Howl({
@@ -285,6 +323,8 @@ export function createHowlerAudioEngine(): AudioEngine {
     },
 
     play() {
+      blockUnintendedResume = false;
+      intentionalPlay = true;
       ensureMediaListeners();
       const result = howl?.play() as unknown;
       if (result && typeof (result as Promise<void>).catch === "function") {
@@ -294,10 +334,14 @@ export function createHowlerAudioEngine(): AudioEngine {
           }
         });
       }
+      intentionalPlay = false;
     },
 
     pause() {
+      intentionalPause = true;
       howl?.pause();
+      intentionalPause = false;
+      blockUnintendedResume = true;
     },
 
     stop() {
@@ -340,11 +384,7 @@ export function createHowlerAudioEngine(): AudioEngine {
       const durationMs = this.getDurationMs();
       if (durationMs <= 0) return;
       const positionMs = Math.max(this.getPositionMs(), this.getMediaPositionMs(), lastProgressMs);
-      if (isNearTrackEnd(howl, positionMs)) {
-        onMediaEnded();
-        return;
-      }
-      if (!howl.playing() && positionMs >= durationMs - 2_000) {
+      if (isNearTrackEnd(howl, positionMs) && howl.playing()) {
         onMediaEnded();
       }
     },

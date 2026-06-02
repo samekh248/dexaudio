@@ -17,6 +17,8 @@ export type PlaybackOrchestratorBridge = {
   preloadBackward: (track: Track) => void;
   tryHandoffForward: () => boolean;
   isFromCache: () => boolean;
+  /** False after the user pauses — blocks auto-advance and unintended resume. */
+  isUserPlaybackActive: () => boolean;
   onWillLoadTrack: () => void;
 };
 
@@ -93,6 +95,8 @@ export function advancePlaybackQueue(reason: TerminalReason): void {
     return;
   }
 
+  if (!bridge.isUserPlaybackActive()) return;
+
   const style = getTransitionStyle();
   if (style === "gapless" || style === "crossfade") {
     if (bridge.tryHandoffForward()) {
@@ -119,10 +123,14 @@ export function onPlaybackProgressOrchestration(
   if (!state.playbackStarted || state.restorePhase) return;
   if (bridge.getActiveTrackId() !== trackId) return;
 
+  const userActive = bridge.isUserPlaybackActive();
+
   preloadNextTrackIfNearEnd(positionMs, durationMs);
   if (positionMs >= durationMs * NEAR_END_PRELOAD_RATIO) {
     prefetchNextCachedTrack(state);
   }
+
+  if (!userActive) return;
 
   const style = getTransitionStyle();
   if (style === "gapless" || style === "crossfade") {
