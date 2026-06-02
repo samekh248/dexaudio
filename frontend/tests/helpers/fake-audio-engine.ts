@@ -74,6 +74,24 @@ export class FakeAudioEngine implements AudioEngine {
     return this._lastProgressMs;
   }
 
+  getMediaPositionMs(): number {
+    return this._positionMs;
+  }
+
+  isMediaEnded(): boolean {
+    return !this._playing && this._state === "loaded" && this._positionMs >= this._durationMs - 250;
+  }
+
+  syncEndedIfComplete(): void {
+    if (this.isMediaEnded()) {
+      this.simulateEnded();
+    }
+  }
+
+  isPlaying(): boolean {
+    return this._playing;
+  }
+
   getDurationMs(): number {
     return this._durationMs;
   }
@@ -98,9 +116,5 @@ export class FakeAudioEngine implements AudioEngine {
     this._state = "unloaded";
     this._playing = false;
     this.events = null;
-  }
-
-  isPlaying(): boolean {
-    return this._playing;
   }
 }

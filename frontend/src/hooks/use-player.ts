@@ -380,9 +380,10 @@ export function usePlayerState() {
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
+        const mediaPositionMs = engine.getMediaPositionMs();
         const positionMs = resolveEndedPositionMs(
-          engine.getPositionMs(),
-          engine.getLastProgressMs(),
+          Math.max(engine.getPositionMs(), mediaPositionMs),
+          Math.max(engine.getLastProgressMs(), mediaPositionMs),
         );
         const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
         const endedEarly = isPrematureEndedPlayback(positionMs, knownDurationMs);
@@ -868,14 +869,27 @@ export function usePlayerState() {
           }
         }
       }
-      if (engineRef.current.state() === "loaded" && (status === "playing" || status === "paused")) {
-        const ms = engineRef.current.getPositionMs();
-        setPosition(ms);
+      const engine = engineRef.current;
+      if (engine.state() === "loaded") {
+        engine.syncEndedIfComplete();
+        const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
+        if (status === "playing" || status === "paused") {
+          setPosition(ms);
+        }
+        const shouldResume =
+          usePlaybackQueue.getState().playbackStarted &&
+          !engine.isMediaEnded() &&
+          (autoplayBlocked || (status === "playing" && !engine.isPlaying()));
+        if (shouldResume) {
+          void Howler.ctx?.resume();
+          setAutoplayBlocked(false);
+          engine.play();
+        }
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [status, scheduleRecovery]);
+  }, [status, scheduleRecovery, autoplayBlocked]);
 
   useEffect(() => {
     return () => {
