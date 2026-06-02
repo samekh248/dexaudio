@@ -59,6 +59,10 @@ import {
   stallWindowExceeded,
 } from "@/lib/recovery-policy.js";
 import { getTransitionStyle, usePlaybackPrefs } from "@/lib/playback-prefs-store.js";
+import {
+  advancePlaybackQueue,
+  onPlaybackProgressOrchestration,
+} from "@/lib/playback-orchestrator.js";
 
 type StagedPlayback = {
   track: Track;
@@ -343,6 +347,7 @@ export function usePlayerState() {
         }),
       );
       onTerminalRef.current?.("failed");
+      advancePlaybackQueue("failed");
     },
     [applyMachine],
   );
@@ -386,7 +391,9 @@ export function usePlayerState() {
           Math.max(engine.getLastProgressMs(), mediaPositionMs),
         );
         const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
-        const endedEarly = isPrematureEndedPlayback(positionMs, knownDurationMs);
+        const endedEarly =
+          !engine.isMediaEnded() &&
+          isPrematureEndedPlayback(positionMs, knownDurationMs);
 
         if (endedEarly) {
           const attempt = machineRef.current.recovery.attempt;
@@ -401,6 +408,7 @@ export function usePlayerState() {
         void checkAndScrobble();
         onEnd?.();
         onTerminalRef.current?.("ended");
+        advancePlaybackQueue("ended");
       },
       onError: (err) => {
         if (loadIdRef.current !== loadId) return;
@@ -451,6 +459,8 @@ export function usePlayerState() {
         setPosition(ms);
         updateListenPosition(ms);
         onPlaybackProgress(track, ms);
+        const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
+        onPlaybackProgressOrchestration(track.id, ms, knownDurationMs);
         if (
           machineRef.current.status === "buffering" &&
           stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
@@ -830,9 +840,11 @@ export function usePlayerState() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (engineRef.current.state() !== "loaded") return;
+      const engine = engineRef.current;
+      if (engine.state() !== "loaded") return;
+      engine.syncEndedIfComplete();
       if (status === "playing") {
-        const ms = engineRef.current.getPositionMs();
+        const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
         setPosition(ms);
         updateListenPosition(ms);
       }
@@ -887,8 +899,13 @@ export function usePlayerState() {
         }
       }
     };
+    const onPageShow = () => onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
   }, [status, scheduleRecovery, autoplayBlocked]);
 
   useEffect(() => {

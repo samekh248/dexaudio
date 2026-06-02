@@ -2,19 +2,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 import { PlayerProvider } from "@/contexts/player-context";
 import { usePlaybackQueue } from "@/stores/playback-queue-store";
-import {
-  bumpPreCacheGeneration,
-  runPreCacheForPlayback,
-} from "@/lib/pre-cache-worker";
 
 const mockPlayer = {
   playing: false,
   position: 0,
   duration: 0,
   volume: 1,
-  fromCache: false,
+  fromCache: true,
   loading: false,
-  status: "idle",
+  status: "playing" as const,
   error: null,
   autoplayBlocked: false,
   loadTrack: vi.fn(),
@@ -45,6 +41,10 @@ vi.mock("@/lib/pre-cache-worker", () => ({
   runPreCacheForPlayback: vi.fn(),
 }));
 
+vi.mock("@/lib/playback-prefs-store", () => ({
+  getTransitionStyle: () => "none",
+}));
+
 const track = (id: string) => ({
   id,
   title: `Track ${id}`,
@@ -54,10 +54,10 @@ const track = (id: string) => ({
   format: "mp3" as const,
 });
 
-describe("PlayerProvider pre-cache gating", () => {
+describe("PlayerProvider queue sync", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockPlayer.fromCache = false;
+    mockPlayer.getActiveTrackId.mockReturnValue("t1");
     usePlaybackQueue.setState({
       items: [track("t1"), track("t2")].map((t) => ({ track: t, source: "user" as const })),
       currentIndex: 0,
@@ -71,27 +71,15 @@ describe("PlayerProvider pre-cache gating", () => {
     });
   });
 
-  it("cancels stale pre-cache work but does not open look-ahead streams for live playback", () => {
+  it("loads the next track when the queue advances without waiting for React effects", () => {
     render(
       <PlayerProvider>
         <div />
       </PlayerProvider>,
     );
 
-    expect(bumpPreCacheGeneration).not.toHaveBeenCalled();
-    expect(runPreCacheForPlayback).not.toHaveBeenCalled();
-  });
+    usePlaybackQueue.getState().next();
 
-  it("runs pre-cache when the active track is already cached", () => {
-    mockPlayer.fromCache = true;
-
-    render(
-      <PlayerProvider>
-        <div />
-      </PlayerProvider>,
-    );
-
-    expect(bumpPreCacheGeneration).toHaveBeenCalledTimes(1);
-    expect(runPreCacheForPlayback).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.loadTrack).toHaveBeenCalledWith(track("t2"));
   });
 });

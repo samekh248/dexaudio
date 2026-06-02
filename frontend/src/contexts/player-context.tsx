@@ -4,8 +4,7 @@ import {
   getQueueCurrentTrack,
   usePlaybackQueue,
 } from "@/stores/playback-queue-store";
-import { bumpPreCacheGeneration, runPreCacheForPlayback } from "@/lib/pre-cache-worker";
-import { getTransitionStyle } from "@/lib/playback-prefs-store";
+import { registerPlaybackOrchestrator } from "@/lib/playback-orchestrator";
 import { toast } from "@/components/ui/sonner";
 
 type PlayerState = ReturnType<typeof usePlayerState>;
@@ -16,50 +15,40 @@ const PlayerContext = createContext<PlayerState | null>(null);
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const player = usePlayerState();
   const current = usePlaybackQueue(getQueueCurrentTrack);
-  const currentIndex = usePlaybackQueue((s) => s.currentIndex);
-  const items = usePlaybackQueue((s) => s.items);
-  const loadGeneration = usePlaybackQueue((s) => s.loadGeneration);
   const restorePhase = usePlaybackQueue((s) => s.restorePhase);
   const restoredElapsedMs = usePlaybackQueue((s) => s.restoredElapsedMs);
-  const playbackStarted = usePlaybackQueue((s) => s.playbackStarted);
 
-  const terminalHandledRef = useRef<string | null>(null);
-  const syncedGenerationRef = useRef(loadGeneration);
-
-  const advanceOnce = useCallback((reason: "ended" | "failed") => {
-    const state = usePlaybackQueue.getState();
-    const sig = `${reason}:${state.loadGeneration}:${state.currentIndex}:${player.getActiveTrackId()}`;
-    if (terminalHandledRef.current === sig) return;
-    terminalHandledRef.current = sig;
-
-    if (reason === "failed" && player.error) {
-      const parts = [
-        [player.error.trackTitle, player.error.trackArtist].filter(Boolean).join(" — "),
-        player.error.technicalDetail,
-      ].filter(Boolean);
-      toast(player.error.message, {
-        description: parts.join(" · ") || undefined,
-      });
-      usePlaybackQueue.getState().markFailed(state.currentIndex);
-    }
-
-    const style = getTransitionStyle();
-    if (reason === "ended" && (style === "gapless" || style === "crossfade")) {
-      if (player.tryHandoffForward()) {
-        usePlaybackQueue.getState().advanceAfterHandoff("forward");
-        return;
-      }
-    }
-
-    usePlaybackQueue.getState().next();
-  }, [player]);
+  const playerRef = useRef(player);
+  playerRef.current = player;
 
   useEffect(() => {
-    player.setTerminalHandler((reason) => {
-      advanceOnce(reason);
+    return registerPlaybackOrchestrator({
+      bridge: {
+        getActiveTrackId: () => playerRef.current.getActiveTrackId(),
+        loadTrack: (track) => playerRef.current.loadTrack(track),
+        seek: (ms) => playerRef.current.seek(ms),
+        preloadForward: (track) => playerRef.current.preloadForward(track),
+        preloadBackward: (track) => playerRef.current.preloadBackward(track),
+        tryHandoffForward: () => playerRef.current.tryHandoffForward(),
+        isFromCache: () => playerRef.current.fromCache,
+        onWillLoadTrack: () => {},
+      },
+      onFailed: (reason) => {
+        if (reason !== "failed" || !playerRef.current.error) return;
+        const state = usePlaybackQueue.getState();
+        const parts = [
+          [playerRef.current.error.trackTitle, playerRef.current.error.trackArtist]
+            .filter(Boolean)
+            .join(" — "),
+          playerRef.current.error.technicalDetail,
+        ].filter(Boolean);
+        toast(playerRef.current.error.message, {
+          description: parts.join(" · ") || undefined,
+        });
+        usePlaybackQueue.getState().markFailed(state.currentIndex);
+      },
     });
-    return () => player.setTerminalHandler(undefined);
-  }, [player, advanceOnce]);
+  }, []);
 
   const startPlaybackFromRestore = useCallback(async () => {
     const track = getQueueCurrentTrack(usePlaybackQueue.getState());
@@ -80,65 +69,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }
     player.play();
   }, [restorePhase, current, startPlaybackFromRestore, player]);
-
-  useEffect(() => {
-    if (!current || !playbackStarted) return;
-    const generation = bumpPreCacheGeneration();
-    // Do not start background downloads while the active track is itself a live
-    // Plex stream. Opening a second uncached stream can cause Plex/browser media
-    // playback to report a premature `ended` on the current track.
-    if (!player.fromCache) return;
-    const tracks = items.map((i) => i.track);
-    void runPreCacheForPlayback(tracks, currentIndex, generation);
-  }, [current?.id, currentIndex, items.length, loadGeneration, playbackStarted, player.fromCache]);
-
-  useEffect(() => {
-    if (!current || restorePhase) return;
-
-    const prevGeneration = syncedGenerationRef.current;
-    const generationChanged = prevGeneration !== loadGeneration;
-    syncedGenerationRef.current = loadGeneration;
-
-    const activeId = player.getActiveTrackId();
-    if (activeId === current.id) {
-      if (generationChanged) {
-        player.seek(0);
-      }
-      return;
-    }
-
-    terminalHandledRef.current = null;
-    void player.loadTrack(current);
-  }, [current?.id, currentIndex, loadGeneration, player.loadTrack, player.getActiveTrackId, player.seek, restorePhase]);
-
-  useEffect(() => {
-    if (!current || player.loading || !player.playing) return;
-    if (restorePhase) return;
-    if (player.getActiveTrackId() !== current.id) return;
-
-    const style = getTransitionStyle();
-    if (style !== "gapless" && style !== "crossfade") return;
-
-    const nextTrack = items[currentIndex + 1]?.track;
-    const prevTrack = items[currentIndex - 1]?.track;
-    if (nextTrack) {
-      player.preloadForward(nextTrack);
-    }
-    if (prevTrack) {
-      player.preloadBackward(prevTrack);
-    }
-  }, [
-    current?.id,
-    currentIndex,
-    items.length,
-    loadGeneration,
-    player.loading,
-    player.playing,
-    player.getActiveTrackId,
-    player.preloadForward,
-    player.preloadBackward,
-    restorePhase,
-  ]);
 
   const playerWithRestore = {
     ...player,
