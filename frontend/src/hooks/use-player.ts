@@ -47,6 +47,7 @@ import {
 } from "@/lib/audio-engine.js";
 import {
   initialPlaybackMachineState,
+  isControlsPlayingStatus,
   isLoadingIndicatorStatus,
   isTerminalStatus,
   reducePlaybackMachine,
@@ -59,6 +60,10 @@ import {
   stallWindowExceeded,
 } from "@/lib/recovery-policy.js";
 import { getTransitionStyle, usePlaybackPrefs } from "@/lib/playback-prefs-store.js";
+import {
+  advancePlaybackQueue,
+  onPlaybackProgressOrchestration,
+} from "@/lib/playback-orchestrator.js";
 
 type StagedPlayback = {
   track: Track;
@@ -128,6 +133,7 @@ export function usePlayerState() {
   const losslessFallbackRef = useRef(false);
   const attemptedLosslessRef = useRef(false);
   const wallClockRef = useRef<number>(Date.now());
+  const userWantsPlaybackRef = useRef(false);
 
   const [playing, setPlaying] = useState(false);
   const [position, setPosition] = useState(0);
@@ -170,7 +176,7 @@ export function usePlayerState() {
     setStatus(next.status);
     setPosition(next.positionMs);
     if (next.failure) setError(next.failure);
-    setPlaying(next.status === "playing");
+    setPlaying(isControlsPlayingStatus(next.status, userWantsPlaybackRef.current));
   }, []);
 
   const syncRestoredPosition = useCallback(() => {
@@ -343,6 +349,7 @@ export function usePlayerState() {
         }),
       );
       onTerminalRef.current?.("failed");
+      advancePlaybackQueue("failed");
     },
     [applyMachine],
   );
@@ -364,10 +371,17 @@ export function usePlayerState() {
         applyMachine(
           reducePlaybackMachine(machineRef.current, { type: "LOADED", autoplay: autoplayOnLoad }),
         );
-        if (autoplayOnLoad) engine.play();
+        if (autoplayOnLoad) {
+          userWantsPlaybackRef.current = true;
+          engine.play();
+        }
       },
       onPlay: () => {
         if (loadIdRef.current !== loadId) return;
+        if (!userWantsPlaybackRef.current) {
+          engine.pause();
+          return;
+        }
         clearError();
         applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
         onPlaybackPlay(track, engine.getPositionMs());
@@ -380,12 +394,16 @@ export function usePlayerState() {
       },
       onEnded: () => {
         if (loadIdRef.current !== loadId) return;
+        if (!userWantsPlaybackRef.current) return;
+        const mediaPositionMs = engine.getMediaPositionMs();
         const positionMs = resolveEndedPositionMs(
-          engine.getPositionMs(),
-          engine.getLastProgressMs(),
+          Math.max(engine.getPositionMs(), mediaPositionMs),
+          Math.max(engine.getLastProgressMs(), mediaPositionMs),
         );
         const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
-        const endedEarly = isPrematureEndedPlayback(positionMs, knownDurationMs);
+        const endedEarly =
+          !engine.isMediaEnded() &&
+          isPrematureEndedPlayback(positionMs, knownDurationMs);
 
         if (endedEarly) {
           const attempt = machineRef.current.recovery.attempt;
@@ -400,6 +418,7 @@ export function usePlayerState() {
         void checkAndScrobble();
         onEnd?.();
         onTerminalRef.current?.("ended");
+        advancePlaybackQueue("ended");
       },
       onError: (err) => {
         if (loadIdRef.current !== loadId) return;
@@ -450,6 +469,8 @@ export function usePlayerState() {
         setPosition(ms);
         updateListenPosition(ms);
         onPlaybackProgress(track, ms);
+        const knownDurationMs = Math.max(engine.getDurationMs(), track.durationMs ?? 0);
+        onPlaybackProgressOrchestration(track.id, ms, knownDurationMs);
         if (
           machineRef.current.status === "buffering" &&
           stallWindowExceeded(machineRef.current.recovery.stallStartedAt, Date.now())
@@ -668,6 +689,9 @@ export function usePlayerState() {
   const loadTrack = useCallback(
     async (track: Track, onEnd?: () => void, options: LoadTrackOptions = {}) => {
       const autoplayOnLoad = options.autoplayOnLoad ?? true;
+      if (autoplayOnLoad) {
+        userWantsPlaybackRef.current = true;
+      }
       const loadId = ++loadIdRef.current;
       useLiveFallbackRef.current = options.skipCache ?? false;
       if (!options.forceTranscoded) {
@@ -745,17 +769,21 @@ export function usePlayerState() {
   loadTrackRef.current = loadTrack;
 
   const resumeAutoplay = useCallback(() => {
+    userWantsPlaybackRef.current = true;
     void Howler.ctx?.resume();
     setAutoplayBlocked(false);
     engineRef.current.play();
   }, []);
 
   const play = useCallback(() => {
+    userWantsPlaybackRef.current = true;
     clearError();
     usePlaybackQueue.getState().markPlaybackStarted();
     const track = currentTrackRef.current;
     if (engineRef.current.state() === "loaded") {
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+    } else {
+      setPlaying(isControlsPlayingStatus(machineRef.current.status, true));
     }
     engineRef.current.play();
     if (track) onPlaybackPlay(track, engineRef.current.getPositionMs());
@@ -763,6 +791,7 @@ export function usePlayerState() {
   }, [clearError, applyMachine, notifyRecentlyPlayedOnPlay]);
 
   const pause = useCallback(() => {
+    userWantsPlaybackRef.current = false;
     const track = currentTrackRef.current;
     engineRef.current.pause();
     if (engineRef.current.state() === "loaded") {
@@ -829,9 +858,11 @@ export function usePlayerState() {
 
   useEffect(() => {
     const id = setInterval(() => {
-      if (engineRef.current.state() !== "loaded") return;
-      if (status === "playing") {
-        const ms = engineRef.current.getPositionMs();
+      const engine = engineRef.current;
+      if (engine.state() !== "loaded") return;
+      if (status === "playing" && userWantsPlaybackRef.current) {
+        engine.syncEndedIfComplete();
+        const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
         setPosition(ms);
         updateListenPosition(ms);
       }
@@ -856,7 +887,8 @@ export function usePlayerState() {
         return;
       }
       const elapsed = Date.now() - wallClockRef.current;
-      if (elapsed > 0 && status === "buffering") {
+      const wasBackgrounded = elapsed > 250;
+      if (wasBackgrounded && status === "buffering") {
         const stallStarted = machineRef.current.recovery.stallStartedAt;
         if (stallStarted !== null && stallWindowExceeded(stallStarted, Date.now())) {
           const track = currentTrackRef.current;
@@ -868,14 +900,34 @@ export function usePlayerState() {
           }
         }
       }
-      if (engineRef.current.state() === "loaded" && (status === "playing" || status === "paused")) {
-        const ms = engineRef.current.getPositionMs();
-        setPosition(ms);
+      const engine = engineRef.current;
+      if (engine.state() === "loaded") {
+        if (status === "playing" && userWantsPlaybackRef.current) {
+          engine.syncEndedIfComplete();
+        }
+        const ms = Math.max(engine.getPositionMs(), engine.getMediaPositionMs());
+        if (status === "playing" || status === "paused") {
+          setPosition(ms);
+        }
+        const shouldResume =
+          usePlaybackQueue.getState().playbackStarted &&
+          !engine.isMediaEnded() &&
+          (autoplayBlocked || (wasBackgrounded && status === "playing" && !engine.isPlaying()));
+        if (shouldResume) {
+          void Howler.ctx?.resume();
+          setAutoplayBlocked(false);
+          engine.play();
+        }
       }
     };
+    const onPageShow = () => onVisibility();
     document.addEventListener("visibilitychange", onVisibility);
-    return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [status, scheduleRecovery]);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [status, scheduleRecovery, autoplayBlocked]);
 
   useEffect(() => {
     return () => {
@@ -922,5 +974,6 @@ export function usePlayerState() {
     cancelStagedPreloads,
     setTerminalHandler,
     isTerminalStatus,
+    isUserPlaybackActive: () => userWantsPlaybackRef.current,
   };
 }

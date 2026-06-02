@@ -3,6 +3,7 @@ import {
   initialPlaybackMachineState,
   reducePlaybackMachine,
   isTerminalStatus,
+  isControlsPlayingStatus,
 } from "@/lib/playback-machine";
 
 const failure = {
@@ -74,5 +75,20 @@ describe("playback-machine", () => {
   it("updates position on seek", () => {
     const s = reducePlaybackMachine(initialPlaybackMachineState, { type: "SEEK", positionMs: 5000 });
     expect(s.positionMs).toBe(5000);
+  });
+
+  it("keeps controls in playing mode while loading or buffering when user wants playback", () => {
+    let s = reducePlaybackMachine(initialPlaybackMachineState, { type: "LOAD" });
+    expect(isControlsPlayingStatus(s.status, true)).toBe(true);
+    expect(isControlsPlayingStatus(s.status, false)).toBe(false);
+
+    s = reducePlaybackMachine(s, { type: "LOADED", autoplay: true });
+    s = reducePlaybackMachine(s, { type: "STALL", nowMs: 1000 });
+    expect(s.status).toBe("buffering");
+    expect(isControlsPlayingStatus(s.status, true)).toBe(true);
+    expect(isControlsPlayingStatus(s.status, false)).toBe(false);
+
+    s = reducePlaybackMachine(s, { type: "PAUSE" });
+    expect(isControlsPlayingStatus(s.status, true)).toBe(false);
   });
 });
