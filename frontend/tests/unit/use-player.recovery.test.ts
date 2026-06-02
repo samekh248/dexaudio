@@ -55,4 +55,13 @@ describe("recovery flow (policy + machine)", () => {
     const positionMs = resolveEndedPositionMs(0, 177_000);
     expect(isPrematureEndedPlayback(positionMs, 180_000)).toBe(false);
   });
+
+  it("does not treat natural end as premature when only media position is current", () => {
+    const mediaPositionMs = 177_000;
+    const positionMs = resolveEndedPositionMs(
+      Math.max(0, mediaPositionMs),
+      Math.max(45_000, mediaPositionMs),
+    );
+    expect(isPrematureEndedPlayback(positionMs, 180_000)).toBe(false);
+  });
 });

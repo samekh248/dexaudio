@@ -22,11 +22,27 @@ export interface AudioEngine {
   getPositionMs(): number;
   /** Last position reported while playing; Howler often resets seek to 0 on end. */
   getLastProgressMs(): number;
+  /** HTML5 media element position; reliable when Howler seek/progress stall in background tabs. */
+  getMediaPositionMs(): number;
   getDurationMs(): number;
+  /** Whether the underlying HTML5 element has reached its natural end. */
+  isMediaEnded(): boolean;
+  /** If playback finished while the tab was backgrounded, emit onEnded once. */
+  syncEndedIfComplete(): void;
+  isPlaying(): boolean;
   setVolume(v: number): void;
   fadeVolume(from: number, to: number, ms: number): void;
   state(): "unloaded" | "loading" | "loaded";
   destroy(): void;
+}
+
+type HowlWithSounds = Howl & {
+  _sounds?: Array<{ _node?: HTMLAudioElement }>;
+};
+
+function html5AudioNode(howl: Howl | null): HTMLAudioElement | null {
+  if (!howl) return null;
+  return (howl as HowlWithSounds)._sounds?.[0]?._node ?? null;
 }
 
 export function createHowlerAudioEngine(): AudioEngine {
@@ -37,6 +53,8 @@ export function createHowlerAudioEngine(): AudioEngine {
   let lastProgressMs = 0;
   let stallWatchId: ReturnType<typeof setInterval> | null = null;
   let stalled = false;
+  let endNotified = false;
+  let mediaNode: HTMLAudioElement | null = null;
 
   const clearStallWatch = () => {
     if (stallWatchId !== null) {
@@ -46,11 +64,60 @@ export function createHowlerAudioEngine(): AudioEngine {
     stalled = false;
   };
 
+  const detachMediaListeners = () => {
+    if (!mediaNode) return;
+    mediaNode.removeEventListener("ended", onMediaEnded);
+    mediaNode.removeEventListener("timeupdate", onMediaTimeUpdate);
+    mediaNode = null;
+  };
+
+  const notifyEnded = () => {
+    if (endNotified) return;
+    endNotified = true;
+    clearStallWatch();
+    events?.onEnded();
+  };
+
+  const onMediaEnded = () => {
+    const node = html5AudioNode(howl);
+    if (node && Number.isFinite(node.currentTime)) {
+      lastProgressMs = Math.max(lastProgressMs, Math.round(node.currentTime * 1000));
+    }
+    notifyEnded();
+  };
+
+  const onMediaTimeUpdate = () => {
+    const node = html5AudioNode(howl);
+    if (!node || !howl?.playing()) return;
+    const pos = Math.round(node.currentTime * 1000);
+    if (!Number.isFinite(pos) || pos <= lastProgressMs) return;
+    lastProgressMs = pos;
+    if (stalled) {
+      stalled = false;
+      events?.onResume();
+    }
+    events?.onProgress(pos);
+  };
+
+  const attachMediaListeners = () => {
+    const node = html5AudioNode(howl);
+    if (!node || node === mediaNode) return;
+    detachMediaListeners();
+    mediaNode = node;
+    node.addEventListener("ended", onMediaEnded);
+    node.addEventListener("timeupdate", onMediaTimeUpdate);
+  };
+
   const startStallWatch = () => {
     clearStallWatch();
+    attachMediaListeners();
     stallWatchId = setInterval(() => {
       if (!howl?.playing()) return;
-      const pos = Math.round((howl.seek() as number) * 1000);
+      const node = html5AudioNode(howl);
+      const pos = node
+        ? Math.round(node.currentTime * 1000)
+        : Math.round((howl.seek() as number) * 1000);
+      if (!Number.isFinite(pos)) return;
       if (pos > lastProgressMs) {
         lastProgressMs = pos;
         if (stalled) {
@@ -70,6 +137,7 @@ export function createHowlerAudioEngine(): AudioEngine {
       this.destroy();
       events = ev;
       lastProgressMs = 0;
+      endNotified = false;
       if (src.startsWith("blob:")) blobUrl = src;
 
       howl = new Howl({
@@ -79,6 +147,7 @@ export function createHowlerAudioEngine(): AudioEngine {
         volume,
         onload: () => {
           const d = howl?.duration() ?? 0;
+          attachMediaListeners();
           events?.onLoaded(Number.isFinite(d) ? Math.round(d * 1000) : 0);
         },
         onplay: () => {
@@ -94,8 +163,7 @@ export function createHowlerAudioEngine(): AudioEngine {
           events?.onPause();
         },
         onend: () => {
-          clearStallWatch();
-          events?.onEnded();
+          onMediaEnded();
         },
         onloaderror: (_id, err) => {
           clearStallWatch();
@@ -145,6 +213,37 @@ export function createHowlerAudioEngine(): AudioEngine {
       return lastProgressMs;
     },
 
+    getMediaPositionMs() {
+      const node = html5AudioNode(howl);
+      if (!node || !Number.isFinite(node.currentTime)) return 0;
+      return Math.round(node.currentTime * 1000);
+    },
+
+    isMediaEnded() {
+      const node = html5AudioNode(howl);
+      return node?.ended === true;
+    },
+
+    syncEndedIfComplete() {
+      if (!howl || howl.state() !== "loaded") return;
+      const node = html5AudioNode(howl);
+      if (node?.ended === true) {
+        onMediaEnded();
+        return;
+      }
+      if (!howl.playing()) return;
+      const durationMs = this.getDurationMs();
+      if (durationMs <= 0) return;
+      const positionMs = Math.max(this.getPositionMs(), this.getMediaPositionMs(), lastProgressMs);
+      if (positionMs >= durationMs - 250) {
+        onMediaEnded();
+      }
+    },
+
+    isPlaying() {
+      return howl?.playing() ?? false;
+    },
+
     getDurationMs() {
       if (!howl) return 0;
       const d = howl.duration();
@@ -168,6 +267,8 @@ export function createHowlerAudioEngine(): AudioEngine {
 
     destroy() {
       clearStallWatch();
+      detachMediaListeners();
+      endNotified = false;
       howl?.unload();
       howl = null;
       if (blobUrl?.startsWith("blob:")) {
