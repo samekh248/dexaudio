@@ -57,6 +57,16 @@ export type GaplessPlaybackPreference = {
 
 export type ThemeMode = "sync" | "light" | "dark" | "custom";
 
+const VALID_THEME_MODES = new Set<ThemeMode>(["sync", "light", "dark", "custom"]);
+
+export function isValidThemeMode(value: unknown): value is ThemeMode {
+  return typeof value === "string" && VALID_THEME_MODES.has(value as ThemeMode);
+}
+
+export function parseThemeMode(raw: unknown): ThemeMode {
+  return isValidThemeMode(raw) ? raw : "sync";
+}
+
 export type PlayNavigationMode = "navigate" | "stay";
 
 const VALID_PLAY_NAVIGATION = new Set<PlayNavigationMode>(["navigate", "stay"]);
@@ -71,6 +81,12 @@ export function isGaplessPlaybackEnabled(): boolean {
 }
 
 export type CuratedThemeId = "warm-tones" | "retrowave" | "elegant";
+
+const VALID_CURATED_IDS = new Set<CuratedThemeId>(["warm-tones", "retrowave", "elegant"]);
+
+export function isValidCuratedThemeId(value: unknown): value is CuratedThemeId {
+  return typeof value === "string" && VALID_CURATED_IDS.has(value as CuratedThemeId);
+}
 
 export type ThemeColorSlots = {
   background: string;
@@ -110,7 +126,7 @@ export function getAdvancedThemes(): AdvancedTheme[] {
 }
 
 export function getThemeMode(): ThemeMode {
-  return getItem(StorageKeys.themeMode, "sync" as ThemeMode);
+  return parseThemeMode(getItem<string>(StorageKeys.themeMode, "sync"));
 }
 
 export function getCustomPresets(): CustomThemePreset[] {
