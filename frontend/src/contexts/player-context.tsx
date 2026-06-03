@@ -30,6 +30,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         preloadForward: (track) => playerRef.current.preloadForward(track),
         preloadBackward: (track) => playerRef.current.preloadBackward(track),
         tryHandoffForward: () => playerRef.current.tryHandoffForward(),
+        cancelStagedOutside: (ids) => playerRef.current.cancelStagedOutside(ids),
         isFromCache: () => playerRef.current.fromCache,
         isUserPlaybackActive: () => playerRef.current.isUserPlaybackActive(),
         onWillLoadTrack: () => {},

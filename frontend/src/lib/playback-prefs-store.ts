@@ -5,14 +5,39 @@ import { getItem, setItem, StorageKeys } from "@/lib/local-storage";
 type CrossfadePreference = { enabled: boolean; durationSec: number };
 type GaplessPreference = { enabled: boolean };
 
+const QUEUE_PREP_DEPTH_MIN = 1;
+const QUEUE_PREP_DEPTH_MAX = 5;
+const QUEUE_PREP_DEPTH_DEFAULT = 3;
+
+type QueuePrepDepthPreference = { depth: number };
+
+export function clampQueuePrepDepth(depth: number): number {
+  const n = Math.round(depth);
+  if (!Number.isFinite(n)) return QUEUE_PREP_DEPTH_DEFAULT;
+  return Math.min(QUEUE_PREP_DEPTH_MAX, Math.max(QUEUE_PREP_DEPTH_MIN, n));
+}
+
+function readQueuePrepDepth(): number {
+  const raw = getItem<QueuePrepDepthPreference>(StorageKeys.queuePrepDepth, {
+    depth: QUEUE_PREP_DEPTH_DEFAULT,
+  });
+  return clampQueuePrepDepth(raw.depth);
+}
+
+function writeQueuePrepDepth(depth: number): void {
+  setItem(StorageKeys.queuePrepDepth, { depth: clampQueuePrepDepth(depth) });
+}
+
 export type PlaybackPrefs = {
   transition: TransitionStyle;
   crossfadeDurationSec: number;
+  queuePrepDepth: number;
 };
 
 export interface PlaybackPrefsStore extends PlaybackPrefs {
   setTransition(style: TransitionStyle): void;
   setCrossfadeDuration(sec: number): void;
+  setQueuePrepDepth(depth: number): void;
 }
 
 function deriveTransition(gapless: GaplessPreference, crossfade: CrossfadePreference): TransitionStyle {
@@ -27,6 +52,7 @@ function readPrefs(): PlaybackPrefs {
   return {
     transition: deriveTransition(gapless, crossfade),
     crossfadeDurationSec: crossfade.durationSec,
+    queuePrepDepth: readQueuePrepDepth(),
   };
 }
 
@@ -68,7 +94,18 @@ export const usePlaybackPrefs = create<PlaybackPrefsStore>((set, get) => ({
     setItem(StorageKeys.crossfade, { ...crossfade, durationSec: sec });
     set({ crossfadeDurationSec: sec });
   },
+
+  setQueuePrepDepth(depth: number) {
+    const clamped = clampQueuePrepDepth(depth);
+    writeQueuePrepDepth(clamped);
+    set({ queuePrepDepth: clamped });
+  },
 }));
+
+/** Read queue preparation depth (for orchestrator). */
+export function getQueuePrepDepth(): number {
+  return usePlaybackPrefs.getState().queuePrepDepth;
+}
 
 /** Read live transition style (for non-React callers). */
 export function getTransitionStyle(): TransitionStyle {

@@ -16,6 +16,8 @@ export const StorageKeys = {
   /** Client prefs: specs/013-play-navigation-preference/contracts/playback-preferences.yaml */
   playNavigation: `${PREFIX}playback.playNavigation`,
   preCacheLookAhead: `${PREFIX}playback.preCacheLookAhead`,
+  /** Client prefs: specs/025-queue-management/contracts/queue-preparation.md */
+  queuePrepDepth: `${PREFIX}playback.queuePrepDepth`,
   preCapGb: `${PREFIX}cache.preCapGb`,
   permanentCapGb: `${PREFIX}cache.permanentCapGb`,
   volume: `${PREFIX}volume`,

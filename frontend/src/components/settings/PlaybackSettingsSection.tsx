@@ -34,6 +34,8 @@ export function PlaybackSettingsSection() {
   const [autoQueue, setAutoQueue] = useState(getItem(StorageKeys.autoQueueSimilar, true));
   const transition = usePlaybackPrefs((s) => s.transition);
   const setTransition = usePlaybackPrefs((s) => s.setTransition);
+  const queuePrepDepth = usePlaybackPrefs((s) => s.queuePrepDepth);
+  const setQueuePrepDepth = usePlaybackPrefs((s) => s.setQueuePrepDepth);
   const [preCache, setPreCache] = useState(getItem(StorageKeys.preCacheLookAhead, 3));
   const losslessEnabled = useLosslessPrefs((s) => s.enabled);
   const setLosslessEnabled = useLosslessPrefs((s) => s.setEnabled);
@@ -122,6 +124,27 @@ export function PlaybackSettingsSection() {
         <span>Auto-queue similar tracks</span>
         <Switch checked={autoQueue} onCheckedChange={(v) => { setAutoQueue(v); setItem(StorageKeys.autoQueueSimilar, v); }} />
       </label>
+      <div className="space-y-2">
+        <Label htmlFor="queue-prep-depth">Queue preload depth (tracks)</Label>
+        <Select
+          value={String(queuePrepDepth)}
+          onValueChange={(value) => setQueuePrepDepth(Number(value))}
+        >
+          <SelectTrigger id="queue-prep-depth" aria-describedby="queue-prep-depth-desc">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5].map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n} {n === 1 ? "track" : "tracks"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p id="queue-prep-depth-desc" className="text-sm text-muted-foreground">
+          How many upcoming tracks to prepare in advance for smoother transitions (default 3).
+        </p>
+      </div>
       <div className="space-y-2">
         <Label>Pre-cache look-ahead (tracks)</Label>
         <Input

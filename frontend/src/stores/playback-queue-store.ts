@@ -29,6 +29,7 @@ interface PlaybackQueueState {
   addAutoTracks: (tracks: Track[]) => void;
   removeAt: (index: number) => void;
   reorder: (from: number, to: number) => void;
+  reorderUpcoming: (from: number, to: number) => void;
   next: () => void;
   previous: () => void;
   setIndex: (index: number) => void;
@@ -231,6 +232,20 @@ export const usePlaybackQueue = create<PlaybackQueueState>((set, get) => ({
       const [moved] = items.splice(from, 1);
       items.splice(to, 0, moved);
       return { items };
+    });
+    schedulePersist(get);
+  },
+
+  reorderUpcoming: (from, to) => {
+    const { currentIndex, items, playbackStarted } = get();
+    if (!playbackStarted || currentIndex < 0) return;
+    if (from <= currentIndex || to <= currentIndex || from === to) return;
+    if (from < 0 || to < 0 || from >= items.length || to >= items.length) return;
+    set((s) => {
+      const next = [...s.items];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return { items: next };
     });
     schedulePersist(get);
   },

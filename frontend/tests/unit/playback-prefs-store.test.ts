@@ -8,6 +8,7 @@ describe("playback-prefs-store", () => {
     usePlaybackPrefs.setState({
       transition: "gapless",
       crossfadeDurationSec: 3,
+      queuePrepDepth: 3,
     });
   });
 
@@ -49,5 +50,19 @@ describe("playback-prefs-store", () => {
     usePlaybackPrefs.getState().setCrossfadeDuration(7);
     expect(getItem(StorageKeys.crossfade, { enabled: false, durationSec: 3 }).durationSec).toBe(7);
     expect(usePlaybackPrefs.getState().crossfadeDurationSec).toBe(7);
+  });
+
+  it("defaults queue prep depth to 3", () => {
+    localStorage.clear();
+    hydratePlaybackPrefsFromStorage();
+    expect(usePlaybackPrefs.getState().queuePrepDepth).toBe(3);
+  });
+
+  it("clamps queue prep depth to 1..5", () => {
+    usePlaybackPrefs.getState().setQueuePrepDepth(99);
+    expect(usePlaybackPrefs.getState().queuePrepDepth).toBe(5);
+    expect(getItem(StorageKeys.queuePrepDepth, { depth: 3 }).depth).toBe(5);
+    usePlaybackPrefs.getState().setQueuePrepDepth(0);
+    expect(usePlaybackPrefs.getState().queuePrepDepth).toBe(1);
   });
 });

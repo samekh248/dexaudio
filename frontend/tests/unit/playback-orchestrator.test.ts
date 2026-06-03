@@ -8,6 +8,7 @@ import { usePlaybackQueue } from "@/stores/playback-queue-store";
 
 vi.mock("@/lib/playback-prefs-store", () => ({
   getTransitionStyle: () => "gapless",
+  getQueuePrepDepth: () => 3,
 }));
 
 const track = (id: string) => ({

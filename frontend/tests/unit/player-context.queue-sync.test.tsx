@@ -28,6 +28,7 @@ const mockPlayer = {
   tryHandoffBackward: vi.fn(() => false),
   getActiveTrackId: vi.fn(() => "t1"),
   cancelStagedPreloads: vi.fn(),
+  cancelStagedOutside: vi.fn(),
   setTerminalHandler: vi.fn(),
   isTerminalStatus: vi.fn(() => false),
 };
@@ -43,6 +44,7 @@ vi.mock("@/lib/pre-cache-worker", () => ({
 
 vi.mock("@/lib/playback-prefs-store", () => ({
   getTransitionStyle: () => "none",
+  getQueuePrepDepth: () => 3,
 }));
 
 const track = (id: string) => ({
