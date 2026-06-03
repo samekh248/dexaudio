@@ -4,8 +4,8 @@ import { useThemeStore } from "@/lib/theme-store";
 
 /**
  * OS theme listener for sync mode only. Store is initialized before React render
- * in main.tsx; do not bootstrap here — a mount-time bootstrap left themeMode at
- * "sync" in the first effect pass and overwrote hydrated light/dark/custom DOM.
+ * in theme-boot-entry / main.tsx; do not bootstrap here — a mount-time bootstrap
+ * left themeMode at "sync" in the first effect pass and overwrote hydrated DOM.
  */
 export function useThemeSync() {
   const themeMode = useThemeStore((s) => s.themeMode);

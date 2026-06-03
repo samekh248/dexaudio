@@ -60,7 +60,7 @@ export function runThemeMigration(): ThemeMigrationResult {
   }
 
   const legacy = getCustomPresets();
-  if (legacy.length === 0) {
+  if (!Array.isArray(legacy) || legacy.length === 0) {
     setItem(StorageKeys.themeMigrationV1, true);
     return { ran: false, notice: null };
   }
