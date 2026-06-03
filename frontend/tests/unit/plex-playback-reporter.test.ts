@@ -8,6 +8,7 @@ import {
   refreshPlexReportingGate,
   setPlexReportingEnabled,
 } from "@/lib/plex-playback-reporter.js";
+import { usePlaybackOutputStore } from "@/lib/playback-output-store";
 
 vi.mock("@/services/api-client.js", () => ({
   api: {
@@ -52,6 +53,22 @@ describe("plex-playback-reporter", () => {
     setPlexReportingEnabled(false);
     onPlaybackPlay(track, 0);
     expect(api.postPlexTimeline).not.toHaveBeenCalled();
+  });
+
+  it("does not report when network output is selected", async () => {
+    const { api } = await import("@/services/api-client.js");
+    await refreshPlexReportingGate();
+    usePlaybackOutputStore.getState().selectNetwork({
+      clientIdentifier: "amp",
+      name: "Amp",
+      product: "Plexamp",
+      reachable: true,
+      supportsSeek: true,
+      supportsQueueSync: true,
+    });
+    onPlaybackPlay(track, 0);
+    expect(api.postPlexTimeline).not.toHaveBeenCalled();
+    usePlaybackOutputStore.getState().selectLocal();
   });
 
   it("skips non-numeric Plex rating keys", async () => {

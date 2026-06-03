@@ -18,6 +18,7 @@ import {
 } from "@/lib/local-storage";
 import { usePlaybackPrefs } from "@/lib/playback-prefs-store";
 import { useLosslessPrefs } from "@/lib/lossless-prefs-store";
+import { useNetworkCastPrefs } from "@/lib/network-cast-prefs-store";
 import type { TransitionStyle } from "@dexaudio/shared-types";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
@@ -39,6 +40,8 @@ export function PlaybackSettingsSection() {
   const [preCache, setPreCache] = useState(getItem(StorageKeys.preCacheLookAhead, 3));
   const losslessEnabled = useLosslessPrefs((s) => s.enabled);
   const setLosslessEnabled = useLosslessPrefs((s) => s.setEnabled);
+  const networkCastEnabled = useNetworkCastPrefs((s) => s.enabled);
+  const setNetworkCastEnabled = useNetworkCastPrefs((s) => s.setEnabled);
 
   const trackTransition = transition;
 
@@ -107,6 +110,20 @@ export function PlaybackSettingsSection() {
           {TRACK_TRANSITION_DESCRIPTIONS[trackTransition]}
         </p>
       </div>
+      <label className="flex items-center justify-between gap-4">
+        <div className="space-y-1">
+          <span>Network cast</span>
+          <p id="network-cast-desc" className="text-sm font-normal text-muted-foreground">
+            Show the cast button on Now Playing to play on Plexamp or other Plex players on your
+            network. Requires Plex to be connected.
+          </p>
+        </div>
+        <Switch
+          checked={networkCastEnabled}
+          onCheckedChange={setNetworkCastEnabled}
+          aria-describedby="network-cast-desc"
+        />
+      </label>
       <label className="flex items-center justify-between gap-4">
         <div className="space-y-1">
           <span>Lossless playback</span>

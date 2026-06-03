@@ -8,6 +8,8 @@ export const REVEALED_GROUP_KEYS = new Set<string>();
 export const GROUP_ENTRY_STAGGER_MS = 60;
 export const GROUP_ENTRY_SLIDE_MS = 400;
 export const GROUP_REDUCE_MOTION_FADE_MS = 250;
+/** Avoid albums staying invisible if cover load never signals ready. */
+export const GROUP_PREPARE_TIMEOUT_MS = 12_000;
 
 export function groupRevealSessionKey(libraryId: string, groupKey: LibraryGroupKey): string {
   return `${libraryId}:${groupKey}`;
@@ -74,6 +76,12 @@ export function useLibraryGroupReveal(
     if (!allEntriesReady(readyByIndex, entryCount)) return;
     setPhase("animating");
   }, [phase, readyByIndex, entryCount]);
+
+  useEffect(() => {
+    if (phase !== "preparing") return;
+    const timer = window.setTimeout(() => completeReveal(), GROUP_PREPARE_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [phase, completeReveal]);
 
   useEffect(() => {
     if (phase !== "animating") return;

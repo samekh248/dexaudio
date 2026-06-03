@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { NotFoundError } from "../../lib/errors.js";
+import { PlexNotConnectedError } from "../../lib/errors.js";
 import * as plexConn from "../../services/plex/plex-connection-service.js";
 import * as libraryService from "../../services/plex/library-service.js";
 import * as albumGroupsService from "../../services/plex/album-groups-service.js";
@@ -18,7 +18,7 @@ const GROUP_CACHE_CONTROL = "private, max-age=60, stale-while-revalidate=300";
 export async function libraryRoutes(app: FastifyInstance) {
   const resolveConfig = async () => {
     const config = await plexConn.getPlexConfig(app.db, app.config.APP_SECRET);
-    if (!config) throw new NotFoundError("Plex not connected");
+    if (!config) throw new PlexNotConnectedError();
     return config;
   };
 

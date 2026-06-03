@@ -1,6 +1,6 @@
 import { useLocation } from "react-router-dom";
 import type { Album, LibraryGroupKey } from "@dexaudio/shared-types";
-import { getItem, StorageKeys } from "@/lib/local-storage";
+import { useActiveLibraryId } from "@/hooks/use-active-library-id";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlbumGrid } from "@/components/albums/AlbumGrid";
 import { useAlbumGroup } from "@/hooks/use-album-group";
@@ -14,7 +14,7 @@ const PAGE_CONFIG: Record<string, { groupKey: LibraryGroupKey; title: string }> 
 export function CategoryAlbumsPage() {
   const { pathname } = useLocation();
   const config = PAGE_CONFIG[pathname];
-  const libraryId = getItem(StorageKeys.activeLibraryId, "");
+  const libraryId = useActiveLibraryId();
   const { data, isLoading, error } = useAlbumGroup(
     libraryId,
     config?.groupKey ?? "recently-added",

@@ -1,5 +1,10 @@
 import { desc, eq } from "drizzle-orm";
-import type { PlexConnectionInput, PlexConnectionPublic, PlexLibrary } from "@dexaudio/shared-types";
+import type {
+  PlexConnectionInput,
+  PlexConnectionIssue,
+  PlexConnectionPublic,
+  PlexLibrary,
+} from "@dexaudio/shared-types";
 import { decrypt, encrypt, maskSecret } from "../../lib/crypto.js";
 import { ValidationError } from "../../lib/errors.js";
 import type { getDb } from "../../db/index.js";
@@ -21,7 +26,19 @@ function clearValidatedConfigCache() {
   validatedConfigCache = null;
 }
 
-function toPublic(row: typeof plexConnections.$inferSelect, tokenMasked?: string): PlexConnectionPublic {
+type PlexConnectionRow = typeof plexConnections.$inferSelect;
+
+type ResolvedStoredConnection =
+  | { status: "missing" }
+  | { status: "decrypt_failed" }
+  | { status: "ok"; config: plexClient.PlexConfig; row: PlexConnectionRow; serverReachable: boolean };
+
+async function fetchLatestConnectionRow(db: Db): Promise<PlexConnectionRow | undefined> {
+  const rows = await db.select().from(plexConnections).orderBy(desc(plexConnections.updatedAt)).limit(1);
+  return rows[0];
+}
+
+function toPublic(row: PlexConnectionRow, tokenMasked?: string): PlexConnectionPublic {
   return {
     connected: true,
     serverUrl: row.serverUrl,
@@ -39,16 +56,114 @@ function toPublic(row: typeof plexConnections.$inferSelect, tokenMasked?: string
   };
 }
 
-export async function getConnectionPublic(db: Db, appSecret: string): Promise<PlexConnectionPublic> {
-  const rows = await db.select().from(plexConnections).orderBy(desc(plexConnections.updatedAt)).limit(1);
-  const row = rows[0];
-  if (!row) return { connected: false };
+function loadPlexConfigRow(row: PlexConnectionRow, appSecret: string): plexClient.PlexConfig | null {
   try {
-    return toPublic(row, maskSecret(decrypt(Buffer.from(row.tokenEncrypted), appSecret)));
+    return {
+      serverUrl: row.serverUrl,
+      token: decrypt(Buffer.from(row.tokenEncrypted), appSecret),
+      machineIdentifier: row.machineIdentifier ?? undefined,
+    };
   } catch {
-    // Stale or corrupted ciphertext — treat as disconnected.
-    return { connected: false };
+    return null;
   }
+}
+
+async function resolveStoredConnection(
+  db: Db,
+  appSecret: string,
+  options: GetPlexConfigOptions = {},
+): Promise<ResolvedStoredConnection> {
+  const validate = options.validate !== false;
+  const row = await fetchLatestConnectionRow(db);
+  if (!row) return { status: "missing" };
+
+  let config = loadPlexConfigRow(row, appSecret);
+  if (!config) return { status: "decrypt_failed" };
+
+  if (!validate) {
+    return { status: "ok", config, row, serverReachable: true };
+  }
+
+  const now = Date.now();
+  if (
+    validatedConfigCache &&
+    now - validatedConfigCache.cachedAt < VALIDATED_CONFIG_CACHE_MS &&
+    validatedConfigCache.config.serverUrl === config.serverUrl &&
+    validatedConfigCache.config.token === config.token
+  ) {
+    return { status: "ok", config: validatedConfigCache.config, row, serverReachable: true };
+  }
+
+  let serverReachable = await plexClient.validateConnection(config);
+  if (serverReachable) {
+    validatedConfigCache = { config, cachedAt: now };
+    return { status: "ok", config, row, serverReachable: true };
+  }
+
+  if (row.machineIdentifier) {
+    const rediscovered = await tryRediscoverServerUrl(db, appSecret, row);
+    if (rediscovered) {
+      config = rediscovered;
+      serverReachable = await plexClient.validateConnection(config);
+      if (serverReachable) {
+        validatedConfigCache = { config, cachedAt: now };
+      }
+      const freshRow = (await fetchLatestConnectionRow(db)) ?? row;
+      return { status: "ok", config, row: freshRow, serverReachable };
+    }
+  }
+
+  return { status: "ok", config, row, serverReachable: false };
+}
+
+function issueMessage(issue: PlexConnectionIssue): string {
+  switch (issue) {
+    case "not_configured":
+      return "Sign in with Plex to browse your library.";
+    case "decrypt_failed":
+      return "Stored Plex credentials could not be read. This usually means APP_SECRET in backend/.env changed. Sign in again without changing APP_SECRET.";
+    case "server_unreachable":
+      return "Plex credentials are saved but the server did not respond. Ensure Plex is running and reachable, or sign in again.";
+    case "reauth_recommended":
+      return "Sign in with Plex once more to restore automatic server reconnection.";
+    default:
+      return "Sign in with Plex.";
+  }
+}
+
+export async function getConnectionPublic(db: Db, appSecret: string): Promise<PlexConnectionPublic> {
+  const resolved = await resolveStoredConnection(db, appSecret, { validate: true });
+
+  if (resolved.status === "missing") {
+    return { connected: false, issue: "not_configured", issueMessage: issueMessage("not_configured") };
+  }
+
+  if (resolved.status === "decrypt_failed") {
+    return { connected: false, issue: "decrypt_failed", issueMessage: issueMessage("decrypt_failed") };
+  }
+
+  let tokenMasked: string | undefined;
+  try {
+    tokenMasked = maskSecret(decrypt(Buffer.from(resolved.row.tokenEncrypted), appSecret));
+  } catch {
+    return { connected: false, issue: "decrypt_failed", issueMessage: issueMessage("decrypt_failed") };
+  }
+
+  const base = toPublic(resolved.row, tokenMasked);
+
+  if (!resolved.serverReachable) {
+    const issue: PlexConnectionIssue = resolved.row.accountTokenEncrypted
+      ? "server_unreachable"
+      : "reauth_recommended";
+    return {
+      ...base,
+      connected: true,
+      issue,
+      issueMessage: issueMessage(issue),
+    };
+  }
+
+  return base;
 }
 
 export async function saveConnection(
@@ -92,68 +207,22 @@ export async function saveConnection(
   return getConnectionPublic(db, appSecret);
 }
 
-function loadPlexConfigRow(
-  row: typeof plexConnections.$inferSelect,
-  appSecret: string,
-): plexClient.PlexConfig | null {
-  try {
-    return {
-      serverUrl: row.serverUrl,
-      token: decrypt(Buffer.from(row.tokenEncrypted), appSecret),
-      machineIdentifier: row.machineIdentifier ?? undefined,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function getPlexConfig(
   db: Db,
   appSecret: string,
   options: GetPlexConfigOptions = {},
 ): Promise<plexClient.PlexConfig | null> {
-  const validate = options.validate !== false;
-  const rows = await db.select().from(plexConnections).orderBy(desc(plexConnections.updatedAt)).limit(1);
-  const row = rows[0];
-  if (!row) return null;
-
-  const config = loadPlexConfigRow(row, appSecret);
-  if (!config) return null;
-
-  if (!validate) {
-    return config;
+  const resolved = await resolveStoredConnection(db, appSecret, options);
+  if (resolved.status === "missing" || resolved.status === "decrypt_failed") {
+    return null;
   }
-
-  const now = Date.now();
-  if (
-    validatedConfigCache &&
-    now - validatedConfigCache.cachedAt < VALIDATED_CONFIG_CACHE_MS &&
-    validatedConfigCache.config.serverUrl === config.serverUrl &&
-    validatedConfigCache.config.token === config.token
-  ) {
-    return validatedConfigCache.config;
-  }
-
-  const valid = await plexClient.validateConnection(config);
-  if (valid) {
-    validatedConfigCache = { config, cachedAt: now };
-    return config;
-  }
-
-  if (!row.machineIdentifier) return config;
-
-  const rediscovered = await tryRediscoverServerUrl(db, appSecret, row);
-  const resolved = rediscovered ?? config;
-  if (rediscovered) {
-    validatedConfigCache = { config: resolved, cachedAt: now };
-  }
-  return resolved;
+  return resolved.config;
 }
 
 async function tryRediscoverServerUrl(
   db: Db,
   appSecret: string,
-  row: typeof plexConnections.$inferSelect,
+  row: PlexConnectionRow,
 ): Promise<plexClient.PlexConfig | null> {
   try {
     if (!row.accountTokenEncrypted) return null;

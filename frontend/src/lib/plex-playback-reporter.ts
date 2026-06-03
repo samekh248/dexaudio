@@ -1,5 +1,6 @@
 import type { PlexTimelineState, Track } from "@dexaudio/shared-types";
 import { api } from "@/services/api-client.js";
+import { usePlaybackOutputStore } from "@/lib/playback-output-store.js";
 
 const HEARTBEAT_MS = 10_000;
 
@@ -74,6 +75,7 @@ export async function refreshPlexReportingGate(): Promise<void> {
 }
 
 function canReport(track: Track): boolean {
+  if (usePlaybackOutputStore.getState().isNetworkMode()) return false;
   if (!reportingEnabled || !plexConnected) return false;
   if (!track.id || !isPlexRatingKey(track.id)) return false;
   if (track.durationMs <= 0) return false;

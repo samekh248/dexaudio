@@ -108,6 +108,7 @@ if ($envContent -notmatch "APP_SECRET=.+" -or ($envContent -match "APP_SECRET=(.
     }
     Set-Content -Path $backendEnv -Value $envContent.TrimEnd()
     Write-Host "Generated APP_SECRET in backend\.env" -ForegroundColor Yellow
+    Write-Host "If you already signed in to Plex in DexAudio, keep this secret stable or you will need to sign in again." -ForegroundColor Yellow
 }
 
 Write-Step "Running database migrations"

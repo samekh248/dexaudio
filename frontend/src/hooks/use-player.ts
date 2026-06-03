@@ -69,6 +69,13 @@ import {
   advancePlaybackQueue,
   onPlaybackProgressOrchestration,
 } from "@/lib/playback-orchestrator.js";
+import { usePlaybackOutputStore } from "@/lib/playback-output-store.js";
+import {
+  controlNetwork,
+  getRemoteUiState,
+  playOnNetworkPlayer,
+  subscribeRemoteUi,
+} from "@/lib/network-playback-orchestrator.js";
 
 type StagedPlayback = {
   track: Track;
@@ -118,6 +125,16 @@ function disposeStaged(slot: StagedPlayback | null) {
 }
 
 export function usePlayerState() {
+  const networkMode = usePlaybackOutputStore((s) => s.preference.mode === "network");
+  const [remoteUi, setRemoteUi] = useState(getRemoteUiState);
+
+  useEffect(() => {
+    if (!networkMode) {
+      setRemoteUi(getRemoteUiState());
+      return;
+    }
+    return subscribeRemoteUi(setRemoteUi);
+  }, [networkMode]);
   const engineRef = useRef<AudioEngine>(createHowlerAudioEngine());
   const loadIdRef = useRef(0);
   const stagedGenRef = useRef(0);
@@ -741,6 +758,19 @@ export function usePlayerState() {
   const loadTrack = useCallback(
     async (track: Track, onEnd?: () => void, options: LoadTrackOptions = {}) => {
       const autoplayOnLoad = options.autoplayOnLoad ?? true;
+      if (usePlaybackOutputStore.getState().isNetworkMode()) {
+        if (autoplayOnLoad) userWantsPlaybackRef.current = true;
+        onEndRef.current = onEnd;
+        currentTrackRef.current = track;
+        clearError();
+        applyMachine(reducePlaybackMachine(machineRef.current, { type: "LOAD" }));
+        await playOnNetworkPlayer(track, onEnd, { offsetMs: options.initialSeekMs });
+        if (autoplayOnLoad) {
+          applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+          setPlaying(true);
+        }
+        return;
+      }
       if (autoplayOnLoad) {
         userWantsPlaybackRef.current = true;
       }
@@ -831,6 +861,12 @@ export function usePlayerState() {
     userWantsPlaybackRef.current = true;
     clearError();
     usePlaybackQueue.getState().markPlaybackStarted();
+    if (usePlaybackOutputStore.getState().isNetworkMode()) {
+      void controlNetwork("resume");
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
+      setPlaying(true);
+      return;
+    }
     const track = currentTrackRef.current;
     if (engineRef.current.state() === "loaded") {
       applyMachine(reducePlaybackMachine(machineRef.current, { type: "PLAY" }));
@@ -844,6 +880,12 @@ export function usePlayerState() {
 
   const pause = useCallback(() => {
     userWantsPlaybackRef.current = false;
+    if (usePlaybackOutputStore.getState().isNetworkMode()) {
+      void controlNetwork("pause");
+      applyMachine(reducePlaybackMachine(machineRef.current, { type: "PAUSE" }));
+      setPlaying(false);
+      return;
+    }
     const track = currentTrackRef.current;
     engineRef.current.pause();
     if (engineRef.current.state() === "loaded") {
@@ -857,6 +899,11 @@ export function usePlayerState() {
   const seek = useCallback(
     (ms: number) => {
       const rounded = Math.round(ms);
+      if (usePlaybackOutputStore.getState().isNetworkMode()) {
+        setPosition(rounded);
+        void controlNetwork("seek", rounded);
+        return;
+      }
       pendingSeekMsRef.current = rounded;
       setPosition(rounded);
       if (seekDebounceRef.current) clearTimeout(seekDebounceRef.current);
@@ -1000,15 +1047,31 @@ export function usePlayerState() {
     };
   }, [cancelStagedPreloads, clearRecoveryTimer]);
 
+  const displayPlaying = networkMode ? remoteUi.playing : playing;
+  const displayPosition = networkMode ? remoteUi.positionMs : position;
+  const displayDuration = networkMode
+    ? remoteUi.durationMs || currentTrackRef.current?.durationMs || duration
+    : duration;
+  const displayLoading = networkMode ? false : loading;
+  const displayStatus: PlaybackStatus = networkMode
+    ? remoteUi.playing
+      ? "playing"
+      : remoteUi.status === "paused"
+        ? "paused"
+        : status
+    : status;
+
   return {
-    playing,
-    position,
-    duration,
+    playing: displayPlaying,
+    position: displayPosition,
+    duration: displayDuration,
     volume,
     fromCache,
     playbackQuality,
-    loading,
-    status,
+    loading: displayLoading,
+    status: displayStatus,
+    networkMode,
+    remoteSupportsSeek: networkMode ? remoteUi.supportsSeek : true,
     error,
     autoplayBlocked,
     loadTrack,

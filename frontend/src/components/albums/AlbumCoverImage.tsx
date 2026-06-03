@@ -4,6 +4,7 @@ import {
   useAlbumCoverLoad,
   type CoverLoadPhase,
 } from "@/hooks/use-album-cover-load";
+import { albumArtSrc } from "@/lib/album-art";
 
 interface AlbumCoverImageProps {
   artUrl: string | undefined;
@@ -18,8 +19,9 @@ export function AlbumCoverImage({
   onPhaseChange,
   fallbackLabel = "No art",
 }: AlbumCoverImageProps) {
+  const resolvedArtUrl = albumArtSrc(artUrl);
   const { phase, showFallback, showEmptySlot, imageRef, imageProps } =
-    useAlbumCoverLoad(artUrl);
+    useAlbumCoverLoad(resolvedArtUrl);
 
   useEffect(() => {
     onPhaseChange?.(phase);
@@ -33,7 +35,7 @@ export function AlbumCoverImage({
           {fallbackLabel}
         </div>
       )}
-      {artUrl && !showFallback && (
+      {resolvedArtUrl && !showFallback && (
         <img ref={imageRef} alt="" loading="lazy" {...imageProps} />
       )}
     </div>

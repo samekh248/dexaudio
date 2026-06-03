@@ -162,6 +162,14 @@ export const PlexAccountIdentitySchema = z.object({
 });
 export type PlexAccountIdentity = z.infer<typeof PlexAccountIdentitySchema>;
 
+export const PlexConnectionIssueSchema = z.enum([
+  "not_configured",
+  "decrypt_failed",
+  "server_unreachable",
+  "reauth_recommended",
+]);
+export type PlexConnectionIssue = z.infer<typeof PlexConnectionIssueSchema>;
+
 export const PlexConnectionPublicSchema = z.object({
   serverUrl: z.string().optional(),
   serverName: z.string().nullable().optional(),
@@ -170,6 +178,9 @@ export const PlexConnectionPublicSchema = z.object({
   libraryIds: z.array(z.string()).optional(),
   connected: z.boolean(),
   account: PlexAccountIdentitySchema.optional(),
+  /** Why the UI should prompt reconnect or wait (omitted when healthy). */
+  issue: PlexConnectionIssueSchema.optional(),
+  issueMessage: z.string().optional(),
 });
 export type PlexConnectionPublic = z.infer<typeof PlexConnectionPublicSchema>;
 
@@ -419,3 +430,101 @@ export const AppSettingsSchema = z.object({
     .optional(),
 });
 export type AppSettings = z.infer<typeof AppSettingsSchema>;
+
+export const NetworkPlayerSchema = z.object({
+  clientIdentifier: z.string(),
+  name: z.string(),
+  product: z.string(),
+  device: z.string().optional(),
+  platform: z.string().optional(),
+  reachable: z.boolean(),
+  supportsSeek: z.boolean(),
+  supportsQueueSync: z.boolean(),
+});
+export type NetworkPlayer = z.infer<typeof NetworkPlayerSchema>;
+
+export const PlayerListEmptyReasonSchema = z.enum([
+  "no_players",
+  "remote_control_disabled",
+  "server_unreachable",
+]);
+export type PlayerListEmptyReason = z.infer<typeof PlayerListEmptyReasonSchema>;
+
+export const PlayerListResponseSchema = z.object({
+  refreshedAt: z.string().datetime(),
+  players: z.array(NetworkPlayerSchema),
+  emptyReason: PlayerListEmptyReasonSchema.optional(),
+});
+export type PlayerListResponse = z.infer<typeof PlayerListResponseSchema>;
+
+export const PlayerStatusSchema = z.object({
+  clientIdentifier: z.string(),
+  state: z.enum(["playing", "paused", "stopped", "idle", "unknown"]),
+  ratingKey: z.string().nullable(),
+  title: z.string().nullable(),
+  artist: z.string().nullable(),
+  album: z.string().nullable(),
+  positionMs: z.number().int().nonnegative(),
+  durationMs: z.number().int().nonnegative(),
+  queueItemId: z.string().nullable().optional(),
+});
+export type PlayerStatus = z.infer<typeof PlayerStatusSchema>;
+
+export const RemotePlayInputSchema = z.object({
+  ratingKey: z.string().min(1),
+  queue: z
+    .object({
+      ratingKeys: z.array(z.string().min(1)),
+      startIndex: z.number().int().nonnegative(),
+    })
+    .optional(),
+  offsetMs: z.number().int().nonnegative().optional(),
+});
+export type RemotePlayInput = z.infer<typeof RemotePlayInputSchema>;
+
+export const RemotePlayDegradedResponseSchema = z.object({
+  degraded: z.literal(true),
+  message: z.string(),
+});
+export type RemotePlayDegradedResponse = z.infer<typeof RemotePlayDegradedResponseSchema>;
+
+export const RemoteControlActionSchema = z.enum([
+  "pause",
+  "resume",
+  "stop",
+  "skipNext",
+  "skipPrevious",
+  "seek",
+]);
+export type RemoteControlAction = z.infer<typeof RemoteControlActionSchema>;
+
+export const RemoteControlInputSchema = z.object({
+  action: RemoteControlActionSchema,
+  seekToMs: z.number().int().nonnegative().optional(),
+});
+export type RemoteControlInput = z.infer<typeof RemoteControlInputSchema>;
+
+export const QueueSyncInputSchema = z.object({
+  ratingKeys: z.array(z.string().min(1)),
+  currentIndex: z.number().int().nonnegative(),
+  interruptPlayback: z.boolean().optional(),
+  queueRevision: z.number().int().nonnegative(),
+});
+export type QueueSyncInput = z.infer<typeof QueueSyncInputSchema>;
+
+export const QueueSyncConflictSchema = z.object({
+  queueRevision: z.number().int(),
+  error: z.string(),
+});
+export type QueueSyncConflict = z.infer<typeof QueueSyncConflictSchema>;
+
+export const PlaybackOutputPreferenceSchema = z.discriminatedUnion("mode", [
+  z.object({ mode: z.literal("local") }),
+  z.object({
+    mode: z.literal("network"),
+    clientIdentifier: z.string(),
+    displayName: z.string(),
+    product: z.string(),
+  }),
+]);
+export type PlaybackOutputPreference = z.infer<typeof PlaybackOutputPreferenceSchema>;

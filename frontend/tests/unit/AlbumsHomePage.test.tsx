@@ -10,8 +10,13 @@ vi.mock("@/lib/local-storage", () => ({
   StorageKeys: { activeLibraryId: "activeLibraryId" },
 }));
 
+vi.mock("@/hooks/use-active-library-id", () => ({
+  useActiveLibraryId: () => "lib-1",
+}));
+
 function renderPage() {
   const client = new QueryClient();
+  client.setQueryData(["plex-connection"], { connected: true });
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter>

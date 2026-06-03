@@ -21,12 +21,25 @@ import { Toaster } from "@/components/ui/sonner";
 import { PlayerProvider } from "@/contexts/player-context";
 import { bootstrapPlaybackSession } from "@/lib/playback-bootstrap";
 import { initPlaybackPersistence } from "@/stores/playback-queue-store";
+import { hydratePlaybackOutputFromStorage } from "@/lib/playback-output-store";
+import {
+  hydrateNetworkCastPrefsFromStorage,
+  isNetworkCastEnabled,
+} from "@/lib/network-cast-prefs-store";
+import { selectLocalOutput } from "@/lib/network-playback-orchestrator";
+import { usePlaybackOutputStore } from "@/lib/playback-output-store";
+import { initNetworkQueueSync } from "@/lib/network-playback-orchestrator";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, retry: 1 } },
 });
 
 bootstrapPlaybackSession();
+hydratePlaybackOutputFromStorage();
+hydrateNetworkCastPrefsFromStorage();
+if (!isNetworkCastEnabled() && usePlaybackOutputStore.getState().isNetworkMode()) {
+  void selectLocalOutput();
+}
 
 function AppRoutes() {
   useThemeSync();
@@ -57,7 +70,14 @@ function AppRoutes() {
 }
 
 export default function App() {
-  useEffect(() => initPlaybackPersistence(), []);
+  useEffect(() => {
+    const unsubQueueSync = initNetworkQueueSync();
+    const unsubPersist = initPlaybackPersistence();
+    return () => {
+      unsubQueueSync();
+      unsubPersist();
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
