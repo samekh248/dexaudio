@@ -5,11 +5,6 @@ import { MemoryRouter } from "react-router-dom";
 import { AlbumsHomePage } from "@/pages/AlbumsHomePage";
 import * as homeGroupsModule from "@/hooks/use-library-home-groups";
 
-vi.mock("@/lib/local-storage", () => ({
-  getItem: () => "lib-1",
-  StorageKeys: { activeLibraryId: "activeLibraryId" },
-}));
-
 vi.mock("@/hooks/use-active-library-id", () => ({
   useActiveLibraryId: () => "lib-1",
 }));
