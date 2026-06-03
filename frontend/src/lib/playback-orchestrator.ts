@@ -1,6 +1,6 @@
-import type { Track } from "@dexaudio/shared-types";
+import type { Track, TrackFormat } from "@dexaudio/shared-types";
 
-import { getTransitionStyle } from "@/lib/playback-prefs-store";
+import { getQueuePrepDepth, getTransitionStyle } from "@/lib/playback-prefs-store";
 import { bumpPreCacheGeneration, runPreCacheForPlayback } from "@/lib/pre-cache-worker";
 import {
   getQueueCurrentTrack,
@@ -20,9 +20,13 @@ export type PlaybackOrchestratorBridge = {
   /** False after the user pauses — blocks auto-advance and unintended resume. */
   isUserPlaybackActive: () => boolean;
   onWillLoadTrack: () => void;
+  cancelStagedOutside?: (keepTrackIds: string[]) => void;
 };
 
 type TerminalReason = "ended" | "failed";
+
+const LOSSLESS_FORMATS = new Set<TrackFormat>(["flac", "alac"]);
+const LOSSLESS_EARLY_PRELOAD_RATIO = 0.5;
 
 let bridge: PlaybackOrchestratorBridge | null = null;
 let onFailed: ((reason: TerminalReason) => void) | null = null;
@@ -43,46 +47,62 @@ function clearTerminalDedupe(): void {
   terminalHandledSig = null;
 }
 
+export function forwardTrackIdsForState(state: PlaybackQueueState): string[] {
+  const depth = getQueuePrepDepth();
+  const ids: string[] = [];
+  for (let i = 1; i <= depth; i++) {
+    const id = state.items[state.currentIndex + i]?.track.id;
+    if (id) ids.push(id);
+  }
+  return ids;
+}
+
+/** Preload up to queuePrepDepth upcoming tracks (all transition modes). */
+export function preloadForwardDepth(state: PlaybackQueueState): void {
+  if (!bridge || !state.playbackStarted || state.restorePhase) return;
+  const depth = getQueuePrepDepth();
+  if (depth < 1) return;
+
+  const current = getQueueCurrentTrack(state);
+  if (!current || bridge.getActiveTrackId() !== current.id) return;
+
+  const keepIds = forwardTrackIdsForState(state);
+  bridge.cancelStagedOutside?.(keepIds);
+
+  for (let i = 1; i <= depth; i++) {
+    const track = state.items[state.currentIndex + i]?.track;
+    if (track) bridge.preloadForward(track);
+  }
+}
+
 function preloadNeighbors(state: PlaybackQueueState): void {
   if (!bridge || !state.playbackStarted || state.restorePhase) return;
   if (state.currentIndex === lastPreloadIndex) return;
   lastPreloadIndex = state.currentIndex;
 
+  preloadForwardDepth(state);
+
   const style = getTransitionStyle();
   if (style !== "gapless" && style !== "crossfade") return;
 
-  const current = getQueueCurrentTrack(state);
-  if (!current || bridge.getActiveTrackId() !== current.id) return;
-
-  const nextTrack = state.items[state.currentIndex + 1]?.track;
   const prevTrack = state.items[state.currentIndex - 1]?.track;
-  if (nextTrack) bridge.preloadForward(nextTrack);
   if (prevTrack) bridge.preloadBackward(prevTrack);
 }
 
 function runPreCache(state: PlaybackQueueState): void {
   if (!bridge || !state.playbackStarted || state.restorePhase) return;
-  // Only skip look-ahead downloads while the *current* track is an active live stream;
-  // still pre-cache upcoming items so the next advance can load from cache in background.
   if (!bridge.isFromCache()) return;
   const tracks = state.items.map((i) => i.track);
   const generation = bumpPreCacheGeneration();
   void runPreCacheForPlayback(tracks, state.currentIndex, generation);
 }
 
-/** When the current track is cached, it is safe to fetch the next track into cache during playback. */
 function prefetchNextCachedTrack(state: PlaybackQueueState): void {
   if (!bridge || !state.playbackStarted || state.restorePhase) return;
   if (!bridge.isFromCache()) return;
-  const nextTrack = state.items[state.currentIndex + 1]?.track;
-  if (!nextTrack) return;
-  bridge.preloadForward(nextTrack);
+  preloadForwardDepth(state);
 }
 
-/**
- * Advance the queue when a track ends. Runs outside React so background-tab
- * throttling does not block auto-advance after the current song finishes.
- */
 export function advancePlaybackQueue(reason: TerminalReason): void {
   if (!bridge) return;
 
@@ -108,10 +128,6 @@ export function advancePlaybackQueue(reason: TerminalReason): void {
   usePlaybackQueue.getState().next();
 }
 
-/**
- * Drive gapless preload and background-safe end detection from playback progress.
- * Media `timeupdate` keeps firing in background tabs; Howler's `ended` timers do not.
- */
 export function onPlaybackProgressOrchestration(
   trackId: string,
   positionMs: number,
@@ -126,6 +142,16 @@ export function onPlaybackProgressOrchestration(
   const userActive = bridge.isUserPlaybackActive();
 
   preloadNextTrackIfNearEnd(positionMs, durationMs);
+
+  const nextFormat = state.items[state.currentIndex + 1]?.track.format;
+  if (
+    nextFormat &&
+    LOSSLESS_FORMATS.has(nextFormat) &&
+    positionMs >= durationMs * LOSSLESS_EARLY_PRELOAD_RATIO
+  ) {
+    preloadForwardDepth(state);
+  }
+
   if (positionMs >= durationMs * NEAR_END_PRELOAD_RATIO) {
     prefetchNextCachedTrack(state);
   }
@@ -156,11 +182,7 @@ export function preloadNextTrackIfNearEnd(positionMs: number, durationMs: number
   const state = usePlaybackQueue.getState();
   if (!state.playbackStarted || state.restorePhase) return;
 
-  const style = getTransitionStyle();
-  if (style !== "gapless" && style !== "crossfade") return;
-
-  const nextTrack = state.items[state.currentIndex + 1]?.track;
-  if (nextTrack) bridge.preloadForward(nextTrack);
+  preloadForwardDepth(state);
 }
 
 export function registerPlaybackOrchestrator(deps: {
@@ -193,7 +215,17 @@ export function registerPlaybackOrchestrator(deps: {
       const indexChanged = state.currentIndex !== prev.currentIndex;
       const generationChanged = state.loadGeneration !== prev.loadGeneration;
       const itemsChanged = state.items !== prev.items;
+
       if (indexChanged) preloadNeighbors(state);
+
+      if (
+        state.playbackStarted &&
+        !state.restorePhase &&
+        (indexChanged || itemsChanged || generationChanged)
+      ) {
+        preloadForwardDepth(state);
+      }
+
       if (
         state.playbackStarted &&
         !state.restorePhase &&

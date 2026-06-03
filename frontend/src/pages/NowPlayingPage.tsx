@@ -22,6 +22,7 @@ export function NowPlayingPage() {
     next,
     setIndex,
     removeAt,
+    reorderUpcoming,
     addAutoTracks,
     resetSkipped,
   } = usePlaybackQueue();
@@ -191,8 +192,10 @@ export function NowPlayingPage() {
       <QueuePanel
         items={items}
         currentIndex={displayIndex}
+        playbackStarted={playbackStarted}
         onSelect={handleQueueSelect}
         onRemove={removeAt}
+        onReorderUpcoming={reorderUpcoming}
       />
     </div>
   );
