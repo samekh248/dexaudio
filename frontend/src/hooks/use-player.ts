@@ -61,6 +61,11 @@ import {
 } from "@/lib/recovery-policy.js";
 import { getTransitionStyle, usePlaybackPrefs } from "@/lib/playback-prefs-store.js";
 import {
+  clearAllExcept,
+  clearTrackPrep,
+  setTrackPrep,
+} from "@/lib/queue-prep-store.js";
+import {
   advancePlaybackQueue,
   onPlaybackProgressOrchestration,
 } from "@/lib/playback-orchestrator.js";
@@ -116,7 +121,7 @@ export function usePlayerState() {
   const engineRef = useRef<AudioEngine>(createHowlerAudioEngine());
   const loadIdRef = useRef(0);
   const stagedGenRef = useRef(0);
-  const stagedForwardRef = useRef<StagedPlayback | null>(null);
+  const stagedForwardByTrackIdRef = useRef<Map<string, StagedPlayback>>(new Map());
   const stagedBackwardRef = useRef<StagedPlayback | null>(null);
   const loadTrackRef = useRef<
     (track: Track, onEnd?: () => void, options?: LoadTrackOptions) => Promise<void>
@@ -207,13 +212,37 @@ export function usePlayerState() {
     setAutoplayBlocked(false);
   }, []);
 
+  const disposeForwardStaged = useCallback((trackId?: string) => {
+    if (trackId) {
+      const slot = stagedForwardByTrackIdRef.current.get(trackId);
+      if (slot) {
+        disposeStaged(slot);
+        stagedForwardByTrackIdRef.current.delete(trackId);
+        clearTrackPrep(trackId);
+      }
+      return;
+    }
+    for (const [id, slot] of stagedForwardByTrackIdRef.current) {
+      disposeStaged(slot);
+      clearTrackPrep(id);
+    }
+    stagedForwardByTrackIdRef.current.clear();
+  }, []);
+
   const cancelStagedPreloads = useCallback(() => {
     stagedGenRef.current += 1;
-    disposeStaged(stagedForwardRef.current);
+    disposeForwardStaged();
     disposeStaged(stagedBackwardRef.current);
-    stagedForwardRef.current = null;
     stagedBackwardRef.current = null;
-  }, []);
+  }, [disposeForwardStaged]);
+
+  const cancelStagedOutside = useCallback((keepTrackIds: string[]) => {
+    const keep = new Set(keepTrackIds);
+    for (const id of [...stagedForwardByTrackIdRef.current.keys()]) {
+      if (!keep.has(id)) disposeForwardStaged(id);
+    }
+    clearAllExcept(keepTrackIds);
+  }, [disposeForwardStaged]);
 
   const unload = useCallback(() => {
     const track = currentTrackRef.current;
@@ -595,35 +624,52 @@ export function usePlayerState() {
 
   const preloadStaged = useCallback(
     async (track: Track, direction: "forward" | "backward", _onEnd?: () => void) => {
-      const style = getTransitionStyle();
-      if (style !== "gapless" && style !== "crossfade") return;
+      if (direction === "backward") {
+        const style = getTransitionStyle();
+        if (style !== "gapless" && style !== "crossfade") return;
+      }
+
+      if (direction === "forward" && stagedForwardByTrackIdRef.current.has(track.id)) {
+        return;
+      }
 
       const gen = ++stagedGenRef.current;
       if (direction === "forward") {
-        disposeStaged(stagedForwardRef.current);
-        stagedForwardRef.current = null;
+        setTrackPrep(track.id, { status: "loading", progressRatio: 0 });
       } else {
         disposeStaged(stagedBackwardRef.current);
         stagedBackwardRef.current = null;
       }
 
       const resolved = await resolveStagedTrackSrc(track, gen);
-      if (stagedGenRef.current !== gen || !resolved) return;
+      if (stagedGenRef.current !== gen || !resolved) {
+        if (direction === "forward") {
+          setTrackPrep(track.id, { status: "error", progressRatio: null });
+        }
+        return;
+      }
 
       const engine = createHowlerAudioEngine();
-      // Lightweight stubs while buffering in the background; promoteStaged swaps
-      // in the full lifecycle handlers once this engine becomes active. A failed
-      // preload simply never reaches "loaded", so promoteStaged falls back to a
-      // normal load.
+      const trackId = track.id;
       engine.load(resolved.src, howlerFormatsForTrack(track.format, { lossless: resolved.attemptLossless }), {
-        onLoaded: () => {},
+        onLoaded: () => {
+          setTrackPrep(trackId, { status: "ready", progressRatio: 1 });
+        },
         onPlay: () => {},
         onPause: () => {},
         onEnded: () => {},
-        onError: () => {},
+        onError: () => {
+          setTrackPrep(trackId, { status: "error", progressRatio: null });
+        },
         onStall: () => {},
         onResume: () => {},
-        onProgress: () => {},
+        onProgress: (ms) => {
+          const dur = engine.getDurationMs();
+          setTrackPrep(trackId, {
+            status: "loading",
+            progressRatio: dur > 0 ? Math.min(1, ms / dur) : null,
+          });
+        },
       });
 
       const staged: StagedPlayback = {
@@ -635,8 +681,11 @@ export function usePlayerState() {
         attemptLossless: resolved.attemptLossless,
         playbackQuality: resolved.playbackQuality,
       };
-      if (direction === "forward") stagedForwardRef.current = staged;
-      else stagedBackwardRef.current = staged;
+      if (direction === "forward") {
+        stagedForwardByTrackIdRef.current.set(track.id, staged);
+      } else {
+        stagedBackwardRef.current = staged;
+      }
     },
     [resolveStagedTrackSrc],
   );
@@ -659,12 +708,15 @@ export function usePlayerState() {
     (expectedTrack?: Track) => {
       const style = getTransitionStyle();
       if (style !== "gapless" && style !== "crossfade") return false;
-      const staged = stagedForwardRef.current;
+      const staged = expectedTrack
+        ? stagedForwardByTrackIdRef.current.get(expectedTrack.id)
+        : stagedForwardByTrackIdRef.current.values().next().value;
       if (!staged) return false;
       if (expectedTrack && staged.track.id !== expectedTrack.id) return false;
       const crossfade = style === "crossfade";
       if (!promoteStaged(staged, onEndRef.current, crossfade)) return false;
-      stagedForwardRef.current = null;
+      stagedForwardByTrackIdRef.current.delete(staged.track.id);
+      clearTrackPrep(staged.track.id);
       return true;
     },
     [promoteStaged],
@@ -826,7 +878,9 @@ export function usePlayerState() {
     setVolumeState(v);
     setItem(StorageKeys.volume, v);
     engineRef.current.setVolume(v);
-    stagedForwardRef.current?.engine.setVolume(v);
+    for (const slot of stagedForwardByTrackIdRef.current.values()) {
+      slot.engine.setVolume(v);
+    }
     stagedBackwardRef.current?.engine.setVolume(v);
   }, []);
 
@@ -972,6 +1026,7 @@ export function usePlayerState() {
     tryHandoffBackward,
     getActiveTrackId,
     cancelStagedPreloads,
+    cancelStagedOutside,
     setTerminalHandler,
     isTerminalStatus,
     isUserPlaybackActive: () => userWantsPlaybackRef.current,

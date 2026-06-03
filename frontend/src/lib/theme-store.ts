@@ -9,12 +9,10 @@ import {
 import { packageToAdvancedTheme, type ThemePackageV1 } from "@/lib/theme-package";
 import { areThemeColorsValid } from "@/lib/theme-colors";
 import {
-  applyAppearancePreference,
-  persistAppearanceRepairs,
-  reconcileAppearancePreference,
-  type ReconciledAppearance,
-} from "@/lib/theme-hydration";
-import { runThemeMigration } from "@/lib/theme-migration";
+  bootstrapThemeFromStorage,
+  type ThemeBootstrapResult,
+} from "@/lib/theme-bootstrap";
+import type { ReconciledAppearance } from "@/lib/theme-hydration";
 import {
   getAdvancedThemes,
   getCustomSelection,
@@ -99,7 +97,21 @@ function persistSelection(selection: CustomSelection): void {
   setItem(StorageKeys.customSelection, selection);
 }
 
-/** Align Zustand with DOM after synchronous `hydrateThemeFromStorage()` (before React render). */
+/** Align Zustand with DOM after synchronous bootstrap (before React render). */
+export function initThemeStoreFromBootstrap(result: ThemeBootstrapResult): void {
+  useThemeStore.setState({
+    themeMode: result.themeMode,
+    advancedThemes: result.advancedThemes,
+    customSelection: result.customSelection,
+    migrationNotice: result.migrationNotice,
+    draft: null,
+    savedDraft: null,
+    dirty: false,
+    editorOpen: false,
+  });
+}
+
+/** Align Zustand with DOM after `hydrateThemeFromStorage()` (tests). */
 export function initThemeStoreFromHydration(
   reconciled: ReconciledAppearance,
   migrationNotice: string | null = null,
@@ -128,12 +140,7 @@ export const useThemeStore = create<ThemeStore>((set, get) => ({
   migrationNotice: null,
 
   bootstrap() {
-    const migration = runThemeMigration();
-    const reconciled = reconcileAppearancePreference();
-    persistAppearanceRepairs(reconciled);
-    const advancedThemes = getAdvancedThemes();
-    applyAppearancePreference(reconciled, advancedThemes);
-    initThemeStoreFromHydration(reconciled, migration.notice);
+    initThemeStoreFromBootstrap(bootstrapThemeFromStorage());
   },
 
   clearMigrationNotice() {

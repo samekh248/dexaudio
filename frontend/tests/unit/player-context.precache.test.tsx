@@ -32,6 +32,7 @@ const mockPlayer = {
   tryHandoffBackward: vi.fn(() => false),
   getActiveTrackId: vi.fn(() => "t1"),
   cancelStagedPreloads: vi.fn(),
+  cancelStagedOutside: vi.fn(),
   setTerminalHandler: vi.fn(),
   isTerminalStatus: vi.fn(() => false),
 };
