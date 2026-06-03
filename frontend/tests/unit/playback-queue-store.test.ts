@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { usePlaybackQueue } from "@/stores/playback-queue-store";
+import {
+  getQueueCurrentTrack,
+  initPlaybackPersistence,
+  usePlaybackQueue,
+} from "@/stores/playback-queue-store";
 import type { Track } from "@dexaudio/shared-types";
 import type { PlaybackSessionSnapshot } from "@/lib/playback-session";
 
@@ -110,6 +114,19 @@ describe("playback queue store", () => {
     });
     usePlaybackQueue.getState().clearAutoItems();
     expect(usePlaybackQueue.getState().items).toHaveLength(1);
+  });
+
+  it("getQueueCurrentTrack respects playbackStarted and index", () => {
+    expect(getQueueCurrentTrack(usePlaybackQueue.getState())).toBeUndefined();
+    usePlaybackQueue.getState().playNow([track("1")]);
+    expect(getQueueCurrentTrack(usePlaybackQueue.getState())?.id).toBe("1");
+  });
+
+  it("initPlaybackPersistence subscribes and cleans up", () => {
+    usePlaybackQueue.setState({ hydrated: true, items: [], currentIndex: 0, playbackStarted: false });
+    const teardown = initPlaybackPersistence();
+    usePlaybackQueue.getState().addToQueue([track("persist")]);
+    teardown();
   });
 
   describe("hydrateFromSnapshot", () => {
