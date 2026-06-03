@@ -7,7 +7,9 @@ import type {
   ArtistSpotlightGroupResponse,
   LibraryGroupKey,
 } from "@dexaudio/shared-types";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ApiError } from "@/services/api-client";
 import { ViewAllLink } from "./ViewAllLink";
 import { LibraryGroupReveal } from "./LibraryGroupReveal";
 import type { GroupRevealPhase } from "@/hooks/use-library-group-reveal";
@@ -50,15 +52,29 @@ export function LibraryGroupSection({
   }
 
   if (isError) {
+    const err = query.error;
+    const needsPlex =
+      err instanceof ApiError &&
+      (err.code === "plex_not_connected" || err.status === 401);
     return (
       <section className="mb-8" aria-labelledby={headingId}>
         <h2 id={headingId} className="mb-3 text-lg font-semibold">
           {title}
         </h2>
-        <p className="text-sm text-muted-foreground">Couldn&apos;t load {title.toLowerCase()}.</p>
-        <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetch()}>
-          Retry
-        </Button>
+        <p className="text-sm text-muted-foreground">
+          {needsPlex
+            ? "Plex is not connected to DexAudio. Sign in again in Settings."
+            : `Couldn't load ${title.toLowerCase()}.`}
+        </p>
+        {needsPlex ? (
+          <Button asChild variant="outline" size="sm" className="mt-2">
+            <Link to="/settings">Open Settings</Link>
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" className="mt-2" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        )}
       </section>
     );
   }

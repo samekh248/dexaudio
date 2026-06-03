@@ -6,6 +6,7 @@ import { TrackMarquee } from "@/components/player/TrackMarquee";
 import { VolumeControl } from "@/components/player/VolumeControl";
 import { cn } from "@/lib/utils";
 import { trackArtSrc } from "@/lib/track-art";
+import { PlaybackOutputCastButton } from "@/components/playback/PlaybackOutputSelector";
 
 export interface NowPlayingControlPanelProps {
   open: boolean;
@@ -152,6 +153,7 @@ export function NowPlayingControlPanel({
           />
         </div>
       </div>
+      <PlaybackOutputCastButton className="absolute bottom-2 right-2 z-20" />
     </div>
   );
 }

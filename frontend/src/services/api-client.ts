@@ -18,6 +18,12 @@ import type {
   PlexPinCreated,
   PlexPinStatus,
   PlexReportingStatus,
+  PlayerListResponse,
+  PlayerStatus,
+  RemotePlayDegradedResponse,
+  RemotePlayInput,
+  RemoteControlInput,
+  QueueSyncInput,
   PlexServerInfo,
   PlexTimelineInput,
   ScrobbleInput,
@@ -89,6 +95,40 @@ export const api = {
     request<{ queued?: boolean }>("/plex/timeline", { method: "POST", body: JSON.stringify(body) }),
 
   getPlexReportingStatus: () => request<PlexReportingStatus>("/plex/reporting/status"),
+
+  getPlexPlayers: (refresh?: boolean) =>
+    request<PlayerListResponse>(
+      `/plex/players${refresh ? "?refresh=true" : ""}`,
+      { cache: "no-store" },
+    ),
+
+  getNetworkPlayerStatus: (clientId: string) =>
+    request<PlayerStatus>(`/plex/players/${encodeURIComponent(clientId)}/status`, {
+      cache: "no-store",
+    }),
+
+  playOnNetworkPlayer: (clientId: string, body: RemotePlayInput) =>
+    request<void | RemotePlayDegradedResponse>(
+      `/plex/players/${encodeURIComponent(clientId)}/play`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
+  controlNetworkPlayer: (clientId: string, body: RemoteControlInput) =>
+    request<void>(`/plex/players/${encodeURIComponent(clientId)}/control`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  syncNetworkPlayerQueue: (clientId: string, body: QueueSyncInput) =>
+    request<void | RemotePlayDegradedResponse>(
+      `/plex/players/${encodeURIComponent(clientId)}/queue`,
+      { method: "PUT", body: JSON.stringify(body) },
+    ),
+
+  switchAwayFromNetworkPlayer: (clientId: string) =>
+    request<void>(`/plex/players/${encodeURIComponent(clientId)}/switch-away`, {
+      method: "POST",
+    }),
 
   retryPlexReporting: () =>
     request<{ status: string; pending: number }>("/plex/reporting/retry", { method: "POST" }),

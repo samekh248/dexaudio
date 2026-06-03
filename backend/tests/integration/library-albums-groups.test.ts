@@ -26,13 +26,15 @@ describe("GET /library/albums/groups", () => {
     vi.restoreAllMocks();
   });
 
-  it("returns 404 when Plex is not connected", async () => {
+  it("returns 401 when Plex is not connected", async () => {
     vi.spyOn(plexConn, "getPlexConfig").mockResolvedValue(null);
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/library/albums/groups?libraryId=1",
     });
-    expect(res.statusCode).toBe(404);
+    expect(res.statusCode).toBe(401);
+    const body = res.json() as { code?: string };
+    expect(body.code).toBe("plex_not_connected");
   });
 
   it("returns groups payload when connected", async () => {

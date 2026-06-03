@@ -20,6 +20,7 @@ interface AudioPlayerProps {
   onVolume: (v: number) => void;
   onNext?: () => void;
   onPrevious?: () => void;
+  seekDisabled?: boolean;
 }
 
 function formatMs(ms: number) {
@@ -55,6 +56,7 @@ export function AudioPlayer({
   onVolume,
   onNext,
   onPrevious,
+  seekDisabled,
 }: AudioPlayerProps) {
   const statusMessage = playbackStatusMessage(loading, status, playing);
 
@@ -79,6 +81,8 @@ export function AudioPlayer({
         step={1000}
         onValueChange={([v]) => onSeek(v)}
         aria-label="Seek"
+        disabled={seekDisabled}
+        title={seekDisabled ? "Seek not supported on this player" : undefined}
       />
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span aria-live="polite">{formatMs(position)}</span>

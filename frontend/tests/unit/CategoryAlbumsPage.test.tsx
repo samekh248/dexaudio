@@ -5,9 +5,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { CategoryAlbumsPage } from "@/pages/CategoryAlbumsPage";
 import * as useAlbumGroupModule from "@/hooks/use-album-group";
 
-vi.mock("@/lib/local-storage", () => ({
-  getItem: () => "lib-1",
-  StorageKeys: { activeLibraryId: "activeLibraryId" },
+vi.mock("@/hooks/use-active-library-id", () => ({
+  useActiveLibraryId: () => "lib-1",
 }));
 
 vi.mock("@/hooks/use-play-album", () => ({

@@ -13,6 +13,7 @@ import { isSessionLevelError } from "@/lib/playback-errors";
 import { AspectRatio } from "@/components/ui/aspect-ratio";
 import { Button } from "@/components/ui/button";
 import { trackArtSrc } from "@/lib/track-art";
+import { PlaybackOutputCastButton } from "@/components/playback/PlaybackOutputSelector";
 
 export function NowPlayingPage() {
   const navigate = useNavigate();
@@ -167,7 +168,9 @@ export function NowPlayingPage() {
           />
         ) : null}
 
-        <AudioPlayer
+        <div className="relative">
+          <PlaybackOutputCastButton className="absolute right-2 top-2 z-10" />
+          <AudioPlayer
           trackFormat={current.format}
           playing={player.playing}
           position={
@@ -181,6 +184,7 @@ export function NowPlayingPage() {
           playbackQuality={player.playbackQuality}
           loading={player.loading}
           status={player.status}
+          seekDisabled={player.networkMode && !player.remoteSupportsSeek}
           onPlay={toggle}
           onPause={player.pause}
           onSeek={player.seek}
@@ -188,6 +192,7 @@ export function NowPlayingPage() {
           onNext={goNext}
           onPrevious={goPrevious}
         />
+        </div>
       </div>
       <QueuePanel
         items={items}

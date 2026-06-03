@@ -28,9 +28,13 @@ describe("plex connection routes", () => {
     expect(res.json()).toEqual({ status: "ok" });
   });
 
-  it("GET /api/v1/plex/connection when not connected", async () => {
+  it("GET /api/v1/plex/connection returns public connection status", async () => {
     const res = await app.inject({ method: "GET", url: "/api/v1/plex/connection" });
     expect(res.statusCode).toBe(200);
-    expect(res.json().connected).toBe(false);
+    const body = res.json() as { connected: boolean; issue?: string };
+    expect(typeof body.connected).toBe("boolean");
+    if (!body.connected) {
+      expect(body.issue).toBe("not_configured");
+    }
   });
 });

@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { PlexAuthModal } from "@/components/plex-auth/PlexAuthModal";
 import { setPlexReportingEnabled } from "@/lib/plex-playback-reporter.js";
+import { usePlaybackOutputStore } from "@/lib/playback-output-store";
 
 export function PlexSettingsSection() {
   const queryClient = useQueryClient();
@@ -24,6 +25,7 @@ export function PlexSettingsSection() {
     staleTime: 60_000,
   });
   const [modalOpen, setModalOpen] = useState(false);
+  const networkOutput = usePlaybackOutputStore((s) => s.preference);
 
   const reportingEnabled = settings?.plexPlaybackReporting?.enabled !== false;
 
@@ -66,8 +68,13 @@ export function PlexSettingsSection() {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-muted-foreground">Not connected to Plex</p>
+        <p className="text-sm text-muted-foreground">
+          {connection?.issueMessage ?? "Not connected to Plex"}
+        </p>
       )}
+      {connection?.connected && connection.issue ? (
+        <p className="text-sm text-amber-600 dark:text-amber-500">{connection.issueMessage}</p>
+      ) : null}
       <Button type="button" variant="outline" onClick={() => setModalOpen(true)}>
         {connection?.connected ? "Re-authenticate" : "Sign in with Plex"}
       </Button>
@@ -79,6 +86,13 @@ export function PlexSettingsSection() {
               <Label htmlFor="plex-playback-reporting">Report playback to Plex</Label>
               <p className="text-sm text-muted-foreground" id="plex-playback-reporting-desc">
                 Updates Plex activity and play history for listening in this app (shown as DexAudio).
+                {networkOutput.mode === "network" ? (
+                  <>
+                    {" "}
+                    Reporting is handled by {networkOutput.displayName} while a network player is
+                    selected.
+                  </>
+                ) : null}
               </p>
             </div>
             <Switch

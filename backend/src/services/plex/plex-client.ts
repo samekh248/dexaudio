@@ -31,7 +31,7 @@ export function plexMediaHeaders(token: string): Record<string, string> {
   };
 }
 
-export async function validateConnection(config: PlexConfig, timeoutMs = 4000): Promise<boolean> {
+export async function validateConnection(config: PlexConfig, timeoutMs = 8000): Promise<boolean> {
   const base = normalizeUrl(config.serverUrl);
   try {
     const res = await fetchWithTimeout(

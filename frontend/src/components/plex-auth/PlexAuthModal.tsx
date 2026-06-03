@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { api } from "@/services/api-client";
 import { clearAllClientData } from "@/lib/indexed-db";
+import { clearPlaybackOutputPreference } from "@/lib/playback-output-store";
 import { clearPlaybackSession } from "@/lib/playback-session";
 import { removeItem, setActiveLibraryId, StorageKeys } from "@/lib/local-storage";
 import { SignInStep } from "./SignInStep";
@@ -53,6 +54,7 @@ export function PlexAuthModal({ open, mode, onOpenChange, onComplete }: PlexAuth
       if (result.dataWiped) {
         await clearAllClientData();
         clearPlaybackSession();
+        clearPlaybackOutputPreference();
         removeItem(StorageKeys.activeLibraryId);
       }
       if (result.connection.libraryIds?.[0]) {

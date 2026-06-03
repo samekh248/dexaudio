@@ -1,11 +1,11 @@
-import { getItem, StorageKeys } from "@/lib/local-storage";
+import { useActiveLibraryId } from "@/hooks/use-active-library-id";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ArtistSpotlightTile } from "@/components/albums/ArtistSpotlightTile";
 import { useAlbumGroup } from "@/hooks/use-album-group";
 import type { ArtistSpotlight } from "@dexaudio/shared-types";
 
 export function CategorySpotlightsPage() {
-  const libraryId = getItem(StorageKeys.activeLibraryId, "");
+  const libraryId = useActiveLibraryId();
   const { data, isLoading, error } = useAlbumGroup(libraryId, "artist-spotlights", 20);
 
   if (!libraryId) {

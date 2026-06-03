@@ -38,6 +38,16 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+/** DexAudio has no stored Plex server token (PMS may still be running). */
+export class PlexNotConnectedError extends AppError {
+  constructor(
+    message = "Plex not connected",
+    action = "Sign in with Plex in Settings",
+  ) {
+    super(message, 401, "plex_not_connected", action);
+  }
+}
+
 export class BadGatewayError extends AppError {
   constructor(message: string, action?: string) {
     super(message, 502, "BAD_GATEWAY", action);

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import type { Album, ArtistSpotlight } from "@dexaudio/shared-types";
-import { getItem, StorageKeys } from "@/lib/local-storage";
+import { useActiveLibraryId } from "@/hooks/use-active-library-id";
+import { api } from "@/services/api-client";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlbumGroupRow } from "@/components/albums/AlbumGroupRow";
 import { AlbumCard } from "@/components/albums/AlbumCard";
@@ -36,7 +38,12 @@ function SpotlightCarouselEntry({
 }
 
 export function AlbumsHomePage() {
-  const libraryId = getItem(StorageKeys.activeLibraryId, "");
+  const libraryId = useActiveLibraryId();
+  const { data: plexConnection, isPending: plexPending } = useQuery({
+    queryKey: ["plex-connection"],
+    queryFn: () => api.getPlexConnection(),
+    staleTime: 30_000,
+  });
   const groups = useLibraryHomeGroups(libraryId);
 
   const previousLibraryId = useRef<string | null>(null);
@@ -46,6 +53,35 @@ export function AlbumsHomePage() {
     }
     previousLibraryId.current = libraryId;
   }, [libraryId]);
+
+  if (plexPending) {
+    return <p className="text-muted-foreground">Checking Plex connection…</p>;
+  }
+
+  if (!plexConnection?.connected) {
+    return (
+      <EmptyState
+        title="Connect Plex to load your library"
+        description={
+          plexConnection?.issueMessage ??
+          "Your Plex server can be running, but DexAudio needs you to sign in once so it can store a secure connection. Open Settings and complete Plex sign-in, then pick your music library."
+        }
+        actionLabel="Open Settings"
+        actionTo="/settings"
+      />
+    );
+  }
+
+  if (plexConnection.issue === "server_unreachable" || plexConnection.issue === "reauth_recommended") {
+    return (
+      <EmptyState
+        title="Plex connection needs attention"
+        description={plexConnection.issueMessage ?? "Check Settings → Plex."}
+        actionLabel="Open Settings"
+        actionTo="/settings?tab=plex"
+      />
+    );
+  }
 
   if (!libraryId) {
     return (

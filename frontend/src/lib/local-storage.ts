@@ -1,5 +1,7 @@
 const PREFIX = "dexaudio.";
 
+export const LIBRARY_CHANGED_EVENT = "dexaudio.library-changed";
+
 export const MAX_ADVANCED_THEMES = 6;
 
 export const StorageKeys = {
@@ -24,7 +26,13 @@ export const StorageKeys = {
   customPresets: `${PREFIX}customPresets`,
   activeLibraryId: `${PREFIX}library.activeId`,
   playbackSession: `${PREFIX}playback.session`,
+  /** specs/024-plexamp-network-playback */
+  playbackOutput: `${PREFIX}playback.output`,
+  /** Show cast / network player output control in Now Playing */
+  networkCastEnabled: `${PREFIX}playback.networkCastEnabled`,
 } as const;
+
+export type { PlaybackOutputPreference } from "@dexaudio/shared-types";
 
 /** Persists active library id and clears playback session when the library changes (FR-012). */
 export function setActiveLibraryId(id: string): void {
@@ -33,6 +41,9 @@ export function setActiveLibraryId(id: string): void {
     removeItem(StorageKeys.playbackSession);
   }
   setItem(StorageKeys.activeLibraryId, id);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(LIBRARY_CHANGED_EVENT));
+  }
 }
 
 export function getItem<T>(key: string, fallback: T): T {

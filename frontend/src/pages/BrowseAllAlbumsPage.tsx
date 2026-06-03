@@ -1,11 +1,40 @@
+import { useQuery } from "@tanstack/react-query";
 import { useAllAlbums } from "@/hooks/use-all-albums";
-import { getItem, StorageKeys } from "@/lib/local-storage";
+import { useActiveLibraryId } from "@/hooks/use-active-library-id";
+import { api } from "@/services/api-client";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AlbumGrid } from "@/components/albums/AlbumGrid";
 
 export function BrowseAllAlbumsPage() {
-  const libraryId = getItem(StorageKeys.activeLibraryId, "");
+  const libraryId = useActiveLibraryId();
+  const { data: plexConnection } = useQuery({
+    queryKey: ["plex-connection"],
+    queryFn: () => api.getPlexConnection(),
+    staleTime: 30_000,
+  });
   const { data, isLoading, error } = useAllAlbums(libraryId);
+
+  if (!plexConnection?.connected) {
+    return (
+      <EmptyState
+        title="Connect Plex to load your library"
+        description={plexConnection?.issueMessage ?? "Sign in with Plex in Settings to browse albums."}
+        actionLabel="Open Settings"
+        actionTo="/settings"
+      />
+    );
+  }
+
+  if (plexConnection.issue === "server_unreachable" || plexConnection.issue === "reauth_recommended") {
+    return (
+      <EmptyState
+        title="Plex connection needs attention"
+        description={plexConnection.issueMessage ?? "Check Settings → Plex."}
+        actionLabel="Open Settings"
+        actionTo="/settings?tab=plex"
+      />
+    );
+  }
 
   if (!libraryId) {
     return (

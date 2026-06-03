@@ -1,4 +1,4 @@
-import { describe, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach } from "vitest";
 import { api } from "@/services/api-client";
 
 function mockFetch(body: unknown, status = 200) {
@@ -36,11 +36,40 @@ describe("api client methods", () => {
     await api.getArtistAlbums("ar1");
     await api.search("query");
     await api.getSimilarTracks("t1");
+    await api.getAlbumGroup("lib1", "recently-added", 10);
+    await api.getAlbumGroup("lib1", "artist-spotlights", 5);
+
+    vi.stubGlobal("fetch", mockFetch({ players: [], refreshedAt: new Date().toISOString() }));
+    await api.getPlexPlayers();
+    await api.getPlexPlayers(true);
+    await api.getNetworkPlayerStatus("client-1");
+    await api.playOnNetworkPlayer("client-1", { ratingKey: "1" });
+    await api.controlNetworkPlayer("client-1", { action: "pause" });
+    await api.syncNetworkPlayerQueue("client-1", {
+      ratingKeys: ["1", "2"],
+      currentIndex: 0,
+      queueRevision: 1,
+    });
+    await api.switchAwayFromNetworkPlayer("client-1");
+
+    vi.stubGlobal("fetch", mockFetch({ queued: false }));
+    await api.postPlexTimeline({
+      ratingKey: "1",
+      state: "playing",
+      timeMs: 0,
+      durationMs: 180000,
+      sessionKey: 1,
+    });
+    await api.getPlexReportingStatus();
+    await api.retryPlexReporting();
   });
 
   it("covers stats settings discogs lastfm", async () => {
     vi.stubGlobal("fetch", mockFetch({ songs: [], albums: [], artists: [] }));
     await api.getTopStats();
+    await api.getStatsOverview("1m", "America/New_York");
+    await api.getStatsPatterns("1m", "America/New_York");
+    await api.getLastfmSyncStatus();
 
     vi.stubGlobal("fetch", mockFetch({ matchingStrictness: "fuzzy" }));
     await api.getSettings();
@@ -59,6 +88,27 @@ describe("api client methods", () => {
       playedAt: new Date().toISOString(),
     });
     await api.retryScrobbles();
+    await api.saveLastfmConnection({ sessionKey: "sk" });
+    await api.startLastfmAuth();
+    await api.getLastfmAuthStatus("token-1");
+    await api.disconnectLastfm();
+  });
+
+  it("throws ApiError on failed response", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: "Unauthorized",
+        json: async () => ({ message: "Plex not connected", code: "plex_not_connected" }),
+      }),
+    );
+    await expect(api.getPlexConnection()).rejects.toMatchObject({
+      message: "Plex not connected",
+      status: 401,
+      code: "plex_not_connected",
+    });
   });
 
   it("handles 204 responses", async () => {
