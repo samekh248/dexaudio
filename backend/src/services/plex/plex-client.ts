@@ -484,6 +484,108 @@ export function parsePartKeyFromTrackXml(xml: string): string | undefined {
   return key;
 }
 
+/** First selected (or first) audio `<Stream streamType="2" id="…">` for `/library/streams/{id}/levels`. */
+export function parseAudioStreamIdFromTrackXml(xml: string): string | undefined {
+  const re = /<Stream\b([^>]*?)(?:\/>|>)/gi;
+  let match: RegExpExecArray | null;
+  let fallback: string | undefined;
+  while ((match = re.exec(xml)) !== null) {
+    const attrs = parseAttrs(match[1]);
+    if (attrs.streamType !== "2" || !attrs.id) continue;
+    if (attrs.selected === "1") return attrs.id;
+    fallback ??= attrs.id;
+  }
+  return fallback;
+}
+
+export function parsePlexLevelValuesFromXml(xml: string): { values: number[]; totalSamples?: number } {
+  const values: number[] = [];
+  const re = /<Level\b([^>]*?)(?:\/>|>)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(xml)) !== null) {
+    const attrs = parseAttrs(match[1]);
+    const raw = attrs.v;
+    if (raw === undefined) continue;
+    const n = Number(raw);
+    if (Number.isFinite(n)) values.push(n);
+  }
+  const totalMatch = xml.match(/totalSamples="([^"]+)"/i);
+  const totalSamples = totalMatch ? Number(totalMatch[1]) : undefined;
+  return {
+    values,
+    totalSamples: Number.isFinite(totalSamples) ? totalSamples : undefined,
+  };
+}
+
+/** Map Plex loudness (dB) to 0–1 bar heights relative to the track peak (linear amplitude). */
+export function normalizeLevelSamples(dbValues: number[]): number[] {
+  if (dbValues.length === 0) return [];
+  const peakDb = Math.max(...dbValues);
+  const floorDb = peakDb - 60;
+  return dbValues.map((db) => {
+    const clamped = Math.max(db, floorDb);
+    return Math.pow(10, (clamped - peakDb) / 20);
+  });
+}
+
+type PlexLevelsJson = {
+  MediaContainer?: {
+    Level?: Array<{ v?: number | string }> | { v?: number | string };
+    totalSamples?: number | string;
+  };
+};
+
+function parsePlexLevelValues(json: PlexLevelsJson): { values: number[]; totalSamples?: number } {
+  const level = json.MediaContainer?.Level;
+  if (!level) return { values: [] };
+  const entries = Array.isArray(level) ? level : [level];
+  const values: number[] = [];
+  for (const entry of entries) {
+    const raw = entry.v;
+    if (raw === undefined) continue;
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(n)) values.push(n);
+  }
+  const totalRaw = json.MediaContainer?.totalSamples;
+  const totalSamples =
+    totalRaw === undefined ? undefined : typeof totalRaw === "number" ? totalRaw : Number(totalRaw);
+  return {
+    values,
+    totalSamples: Number.isFinite(totalSamples) ? totalSamples : undefined,
+  };
+}
+
+export async function fetchStreamLevels(
+  config: PlexConfig,
+  audioStreamId: string,
+  subsample: number,
+): Promise<
+  | { ok: true; values: number[]; totalSamples?: number }
+  | { ok: false; status: number }
+> {
+  const base = normalizeUrl(config.serverUrl);
+  const url = `${base}/library/streams/${encodeURIComponent(audioStreamId)}/levels?subsample=${subsample}`;
+  const headers = {
+    ...plexMediaHeaders(config.token),
+    Accept: "application/json",
+  };
+  const res = await fetch(url, { headers });
+  if (!res.ok) return { ok: false, status: res.status };
+  const body = await res.text();
+  const contentType = res.headers.get("content-type") ?? "";
+  let parsed: { values: number[]; totalSamples?: number };
+  if (contentType.includes("json") || body.trimStart().startsWith("{")) {
+    try {
+      parsed = parsePlexLevelValues(JSON.parse(body) as PlexLevelsJson);
+    } catch {
+      parsed = parsePlexLevelValuesFromXml(body);
+    }
+  } else {
+    parsed = parsePlexLevelValuesFromXml(body);
+  }
+  return { ok: true, values: parsed.values, totalSamples: parsed.totalSamples };
+}
+
 /** Direct stream of the original media file via the Part key (lossless / native delivery). */
 export function getPartStreamUrl(config: PlexConfig, partKey: string): string {
   const base = normalizeUrl(config.serverUrl);
@@ -542,6 +644,7 @@ export function parseTrackMetadataXml(xml: string): Track | null {
 export type TrackStreamContext = {
   track: Track | null;
   partKey?: string;
+  audioStreamId?: string;
 };
 
 export async function fetchTrackStreamContext(
@@ -549,7 +652,7 @@ export async function fetchTrackStreamContext(
   trackId: string,
 ): Promise<TrackStreamContext> {
   const base = normalizeUrl(config.serverUrl);
-  const url = `${base}/library/metadata/${trackId}`;
+  const url = `${base}/library/metadata/${trackId}?includeStreamDetails=1`;
   const res = await fetch(url, { headers: plexMediaHeaders(config.token) });
   if (res.status === 401) return { track: null };
   if (res.status === 404) return { track: null };
@@ -558,6 +661,7 @@ export async function fetchTrackStreamContext(
   return {
     track: parseTrackMetadataXml(xml),
     partKey: parsePartKeyFromTrackXml(xml),
+    audioStreamId: parseAudioStreamIdFromTrackXml(xml),
   };
 }
 
