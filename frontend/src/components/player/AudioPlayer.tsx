@@ -3,8 +3,10 @@ import type { AudioQuality, TrackFormat } from "@dexaudio/shared-types";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { VolumeControl } from "@/components/player/VolumeControl";
+import { TrackWaveform } from "@/components/player/TrackWaveform";
 
 interface AudioPlayerProps {
+  trackId?: string;
   playing: boolean;
   position: number;
   duration: number;
@@ -41,6 +43,7 @@ function playbackStatusMessage(
 }
 
 export function AudioPlayer({
+  trackId,
   playing,
   position,
   duration,
@@ -75,6 +78,15 @@ export function AudioPlayer({
           </span>
         )}
       </div>
+      {trackId ? (
+        <TrackWaveform
+          trackId={trackId}
+          positionMs={position}
+          durationMs={duration}
+          seekDisabled={seekDisabled}
+          onSeek={onSeek}
+        />
+      ) : null}
       <Slider
         value={[position]}
         max={duration || 1}

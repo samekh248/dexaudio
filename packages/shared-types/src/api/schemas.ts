@@ -528,3 +528,17 @@ export const PlaybackOutputPreferenceSchema = z.discriminatedUnion("mode", [
   }),
 ]);
 export type PlaybackOutputPreference = z.infer<typeof PlaybackOutputPreferenceSchema>;
+
+/** Normalized loudness samples for Now Playing waveform (spec 026). */
+export const TrackWaveformSchema = z.object({
+  trackId: z.string(),
+  samples: z.array(z.number().min(0).max(1)).min(1),
+  sampleIntervalMs: z.number().int().positive(),
+  durationMs: z.number().int().nonnegative(),
+});
+export type TrackWaveform = z.infer<typeof TrackWaveformSchema>;
+
+export const TrackWaveformQuerySchema = z.object({
+  subsample: z.coerce.number().int().min(1).max(2000).default(256),
+});
+export type TrackWaveformQuery = z.infer<typeof TrackWaveformQuerySchema>;

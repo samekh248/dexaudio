@@ -171,6 +171,7 @@ export function NowPlayingPage() {
         <div className="relative">
           <PlaybackOutputCastButton className="absolute right-2 top-2 z-10" />
           <AudioPlayer
+          trackId={current.id}
           trackFormat={current.format}
           playing={player.playing}
           position={

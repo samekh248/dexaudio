@@ -1,10 +1,12 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { PlexNotConnectedError } from "../../lib/errors.js";
+import { TrackWaveformQuerySchema } from "@dexaudio/shared-types";
+import { PlexNotConnectedError, ValidationError } from "../../lib/errors.js";
 import * as plexConn from "../../services/plex/plex-connection-service.js";
 import * as libraryService from "../../services/plex/library-service.js";
 import * as albumGroupsService from "../../services/plex/album-groups-service.js";
 import * as albumListService from "../../services/plex/album-list-service.js";
+import * as trackWaveformService from "../../services/plex/track-waveform-service.js";
 
 // Contract: specs/006-library-view-refactor/contracts/openapi.yaml
 
@@ -102,5 +104,16 @@ export async function libraryRoutes(app: FastifyInstance) {
     const { q } = z.object({ q: z.string().min(1) }).parse(request.query);
     const config = await resolveConfig();
     return libraryService.searchLibrary(config, q);
+  });
+
+  app.get("/library/tracks/:trackId/waveform", async (request) => {
+    const { trackId } = z.object({ trackId: z.string() }).parse(request.params);
+    const queryParsed = TrackWaveformQuerySchema.safeParse(request.query);
+    if (!queryParsed.success) {
+      throw new ValidationError("Invalid waveform query parameters");
+    }
+    const { subsample } = queryParsed.data;
+    const config = await resolveConfig();
+    return trackWaveformService.getTrackWaveform(config, trackId, subsample);
   });
 }
